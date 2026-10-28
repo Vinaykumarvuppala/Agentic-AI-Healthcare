@@ -8,6 +8,10 @@ Try public CMS procedure-code lookup and semantic search directly in your browse
 
 A runnable Python project using **real, publicly available CMS Physician Fee Schedule data**, local semantic embeddings, and a **LangGraph** routing/retrieval workflow.
 
+## V15 — HCPCS code lifecycle (new, effective, discontinued)
+
+The **Code lifecycle** tab supports official CMS **HCPCS Level II** dated records, with an upload-and-column-map workflow for CSV or Excel extracts of the official quarterly files. Users can select an as-of date and change-window start, filter active/new/expired/future/unknown records, and export results. The app never treats a PFS data publication date as a code's original effective date. CMS termination date means the **last valid service date**; the next day is discontinued. Data must include explicit code-level dates. The current implementation does **not** automatically parse the CMS raw fixed-width ZIP, and does not cover AMA CPT (numeric Level I) lifecycle dates. Official source: https://www.cms.gov/medicare/coding-billing/healthcare-common-procedure-system/quarterly-update .
+
 ## V14 — Guided investigation report
 
 In the **Investigate** tab, select a code, enter a research question and generate a Markdown analyst report. The workflow checks public CMS source rows, optionally retrieves passages from the configured CMS E/M guide for relevant office/outpatient code families, and produces source-linked findings, uncertainties, next steps and execution trace. Download the report as Markdown. No API key required; it does not infer real-world billing compliance or payment decisions.
