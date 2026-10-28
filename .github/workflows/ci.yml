@@ -11,7 +11,9 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install test dependencies
-        run: pip install pandas numpy requests pytest langgraph pypdf
+        run: pip install -r requirements.txt
+      - name: Import smoke test
+        run: python -c "import cms_transactions, cms_source_diagnostics, cms_quarterly, etl_exports; print('Optional module imports OK')"
       - name: Run unit tests
         run: pytest -q
       - name: Check syntax
