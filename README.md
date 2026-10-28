@@ -37,7 +37,7 @@ The first semantic-search run downloads the open MiniLM embedding model and comp
 
 ## What is NOT implemented yet
 
-A generative LLM is **not** called. The LangGraph workflow is a grounded retrieval agent, not an autonomous multi-agent system. There is no real claims adjudication, private provider contract analysis, persistent vector DB, or production deployment. Those are later milestones.
+An **optional** generative LLM can synthesize a grounded answer with [numbered citations] from retrieved CMS rows when OPENAI_API_KEY is configured. The LangGraph workflow is still a grounded retrieval agent, **not** an autonomous multi-agent system. There is no real claims adjudication, private provider contract analysis, persistent vector DB, or production deployment. Those are later milestones.
 
 ## Tests
 
@@ -48,6 +48,21 @@ pytest -q
 ## Responsible use
 
 CMS indicators are **not** sufficient to calculate a claim's actual payable amount. Geographic adjustment, service location, eligible provider type, effective date, applicable policy and fee schedule, modifiers, and other factors matter. Do not use this tool for real payment decisions or PHI.
+
+## Optional LLM and deployment
+
+Set `OPENAI_API_KEY` in your local environment or Streamlit Cloud secrets (never commit the key). Choose the LLM explanation checkbox after a semantic search. The default OpenAI model is configured in `llm_rag.py` and may require API access and incur usage charges.
+
+Run in Docker:
+
+```bash
+docker build -t cms-agent-lab .
+docker run --rm -p 8501:8501 -e OPENAI_API_KEY cms-agent-lab
+```
+
+For Streamlit Community Cloud: create an app using this repository, branch `main`, and entrypoint `app.py`. Configure `OPENAI_API_KEY` as a secret for optional LLM answers. Large embedding indexes may exceed free hosting limits; consider an external persisted vector index for production.
+
+GitHub Actions checks unit tests and Python syntax on pushes and pull requests.
 
 ## Next phase
 
