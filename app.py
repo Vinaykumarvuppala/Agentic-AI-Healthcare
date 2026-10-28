@@ -10,6 +10,7 @@ from lifecycle import normalize_lifecycle, classify, SOURCE as LIFECYCLE_SOURCE
 from investigation_graph import make_investigation_graph
 from cms_quarterly import load_quarterly_changes, CMS_PAGE
 from etl_exports import jsonl, json_array, sqlserver_script, oracle_script
+from cms_transactions import fetch_dated_release
 from cms_agent import CMS_CSV_URL, VectorSearch, build_agent, build_documents, load_cms_data
 from llm_rag import answer_with_llm
 from policy_rag import load_policy_chunks
@@ -292,6 +293,19 @@ with tab_lifecycle:
                 with st.expander("Data Export / ETL — SQL Server, Oracle, JSON", expanded=False):
                     st.caption("Exports the filtered comparison rows. Dates are NULL until verified code-level effective and termination dates are available.")
                     verified = None
+                    st.markdown("**Automatic verified dates from official CMS transaction workbook**")
+                    if st.button("Load dated transaction records",key="auto_dates_v18"):
+                        st.session_state["auto_dates_requested_v18"] = newer
+                    if st.session_state.get("auto_dates_requested_v18")==newer:
+                        try:
+                            @st.cache_data(ttl=86400,show_spinner="Reading official CMS transaction workbook…")
+                            def dated_codes_for_release(release):
+                                return fetch_dated_release(release)
+                            verified=dated_codes_for_release(newer)
+                            st.success(f"{len(verified):,} unambiguous dated code records available from {newer}.")
+                            st.caption("Dates come from explicit CMS transaction fields, not release dates. Conflicting records are excluded.")
+                        except Exception as date_exc:
+                            st.warning(f"Automatic date extraction unavailable: {date_exc}. You can still upload mapped dated records.")
                     dated_upload = st.file_uploader("Optional: attach verified code-level effective / termination dates (CSV or XLSX)",type=["csv","xlsx"],key="etl_dated_v17")
                     if dated_upload is not None:
                         try:
