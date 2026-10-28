@@ -8,6 +8,10 @@ Try public CMS procedure-code lookup and semantic search directly in your browse
 
 A runnable Python project using **real, publicly available CMS Physician Fee Schedule data**, local semantic embeddings, and a **LangGraph** routing/retrieval workflow.
 
+## V8 — One search field with optional semantic discovery
+
+The primary Find a service tab now combines fast keyword/code autocomplete with a **Find related services by meaning** button, using the same query text. No second search box or separate advanced search area is required. Regular autocomplete remains instant and API-key-free; semantic retrieval is run on demand because embedding preparation may take time and memory on Streamlit Community Cloud. Semantic suggestions can be clicked to inspect CMS code details. This is approximate retrieval, not coding or billing advice.
+
 ## V7 — Smarter search
 
 Autocomplete now distinguishes exact codes, code prefixes, description phrases and numerical fragments, supports everyday aliases (e.g. "doctor visit", "checkup", "x-ray"), and uses conservative spelling correction as a fallback for inputs such as "offce". The search remains fast and deterministic; it does not require an LLM or charge API fees.
