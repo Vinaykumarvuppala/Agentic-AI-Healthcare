@@ -11,6 +11,7 @@ from investigation_graph import make_investigation_graph
 from cms_quarterly import load_quarterly_changes, CMS_PAGE
 from etl_exports import jsonl, json_array, sqlserver_script, oracle_script, COLS
 from custom_etl import export_rows, render_export
+from project_roadmap import ROADMAP, counts, STATUSES
 from cms_agent import CMS_CSV_URL, VectorSearch, build_agent, build_documents, load_cms_data
 from llm_rag import answer_with_llm
 from policy_rag import load_policy_chunks
@@ -50,7 +51,7 @@ except Exception as exc:
 st.title("CMS Intelligence")
 st.write("**Find a medical service, explore HCPCS codes, or ask a question about CMS guidance.**")
 st.caption("Public CMS Physician Fee Schedule indicators · Educational research · 2026")
-tab_search, tab_compare, tab_lifecycle, tab_investigate, tab_ask, tab_info = st.tabs(["🔎 Find a service", "⚖️ Compare codes", "📅 Code lifecycle", "🧭 Investigate", "💬 Ask CMS", "ℹ️ About"])
+tab_search, tab_compare, tab_lifecycle, tab_investigate, tab_ask, tab_roadmap, tab_info = st.tabs(["🔎 Find a service", "⚖️ Compare codes", "📅 Code lifecycle", "🧭 Investigate", "💬 Ask CMS", "🗺️ Project roadmap", "ℹ️ About"])
 
 with tab_search:
     st.subheader("What are you looking for?")
@@ -563,6 +564,37 @@ with tab_ask:
                 st.session_state.chat_v6.append({"question":prompt,"answer":answer,"citations":result["citations"],"trace":result["trace"]})
             except Exception as exc:
                 st.error(f"Research retrieval failed: {exc}")
+
+
+with tab_roadmap:
+    st.subheader("Agentic AI project roadmap")
+    st.caption("What is coded, what still needs verification, and what we build next. Statuses are maintained in project_roadmap.py on GitHub.")
+    progress=counts()
+    x,y,z=st.columns(3)
+    x.metric("Implemented in code",progress["Implemented"])
+    y.metric("Needs validation",progress["Prototype / needs validation"])
+    z.metric("Planned",progress["Planned"])
+    st.progress(progress["Implemented"]/len(ROADMAP),text=f"{progress['Implemented']} of {len(ROADMAP)} capabilities implemented in code")
+    st.info("A committed implementation does not automatically mean it is production-ready or verified on Streamlit. 'Planned' means not yet built.")
+    phase=st.selectbox("Development phase",["All phases","Phase 1 — Foundations","Phase 2 — RAG and healthcare ETL","Phase 3 — Agents and evaluations","Phase 4 — Cloud production"],key="roadmap_phase")
+    status=st.selectbox("Feature status",["All statuses"]+list(STATUSES),key="roadmap_status")
+    filtered=ROADMAP
+    if phase!="All phases":
+        chosen_phase=int(phase.split(" ")[1])
+        filtered=[x for x in filtered if x["phase"]==chosen_phase]
+    if status!="All statuses":
+        filtered=[x for x in filtered if x["status"]==status]
+    for item in filtered:
+        with st.container(border=True):
+            heading="✅" if item["status"]=="Implemented" else "🟡" if item["status"].startswith("Prototype") else "⬜"
+            st.markdown(f"**{heading} {item['feature']}**")
+            st.caption(f"Phase {item['phase']} · {item['area']} · {item['status']}")
+            if item["evidence"]:
+                st.caption("Code: "+item["evidence"])
+            st.write("**Next:** "+item["next"])
+    st.markdown("#### Recommended next milestone")
+    st.write("Build a **persistent vector database and evaluation dataset**, then introduce LangChain tools, LangGraph checkpoints, and human approvals. Benchmark multiple LLMs before AWS and Kubernetes production deployment.")
+    st.markdown("[Project source and roadmap](https://github.com/Vinaykumarvuppala/Agentic-AI-Healthcare)")
 
 with tab_info:
     a,b,c=st.columns(3)
