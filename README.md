@@ -8,6 +8,10 @@ Try public CMS procedure-code lookup and semantic search directly in your browse
 
 A runnable Python project using **real, publicly available CMS Physician Fee Schedule data**, local semantic embeddings, and a **LangGraph** routing/retrieval workflow.
 
+## V16 — Automatic official CMS quarterly comparison
+
+The Code lifecycle tab now includes **Load official CMS changes**, which discovers ZIP links on the CMS quarterly update page, downloads the selected full snapshots, parses the ANWEB primary code file and compares the code sets/text. The results show **Appeared in newer release**, **Absent from newer release**, and **Record text changed**, with source links and downloadable CSV. These are snapshot comparisons, **not exact code-level addition/termination dates**. For authoritative dates use the separate upload-and-map transaction record workflow; numeric AMA CPT is outside this Level II scope. CMS may change its file layout; the parser fails visibly rather than inventing results. Network/download reliability on Streamlit Community Cloud has not been verified.
+
 ## Guided LangGraph investigation nodes
 
 The Investigate workflow now has explicit validation, PFS record retrieval, optional E/M policy retrieval, uncertainty review, and report-generation nodes. This is a deterministic LangGraph pipeline; it does not autonomously approve reimbursement or coding decisions. Missing source evidence is flagged for human review.
