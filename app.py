@@ -46,11 +46,14 @@ tab_search, tab_ask, tab_info = st.tabs(["🔎 Find a service", "💬 Ask CMS", 
 
 with tab_search:
     st.subheader("What are you looking for?")
-    q = st.text_input("Search codes or services", placeholder="Try office, office visits, 22, 99213, emergency room…", key="search_v6")
+    q = st.text_input("Search codes or services", placeholder="Search: office visits, checkup, 99213, 22, even offce…", key="search_v6")
+    if st.session_state.get("last_query_v7") != q:
+        st.session_state.pop("selected_code_v6", None)
+        st.session_state["last_query_v7"] = q
     if not q.strip():
         st.caption("Start typing to see matching procedures. Search descriptions, partial codes, or common terms.")
         st.markdown("**Popular searches**")
-        choices = ["office", "99213", "22", "preventive", "x-ray"]
+        choices = ["doctor visit", "99213", "22", "checkup", "x-ray"]
         cols = st.columns(len(choices))
         for col, value in zip(cols,choices):
             with col:
@@ -61,7 +64,7 @@ with tab_search:
     else:
         hits = suggest(df, q, limit=80)
         if hits:
-            st.caption(f"Best matches for **{q}** · showing {min(6,len(hits))} suggestions first")
+            st.caption(f"Matching CMS records for **{q}** · top {min(6,len(hits))} shown · additional matches below")
             for i,item in enumerate(hits[:6]):
                 if st.button(f"{item['code']}   ·   {item['description']}", key=f"hit_{i}_{item['code']}", use_container_width=True):
                     st.session_state["selected_code_v6"] = item["code"]
@@ -74,7 +77,7 @@ with tab_search:
             if len(hits)==80:
                 st.caption("Showing the top 80; refine your search for more precise matches.")
         else:
-            st.info("No exact description or code matches. Try a shorter term, or use Ask CMS for a meaning-based search.")
+            st.info("No matches found. Try a shorter phrase, a code fragment, or use Ask CMS for meaning-based research.")
 
     chosen = st.session_state.get("selected_code_v6")
     if chosen:
@@ -151,4 +154,4 @@ with tab_info:
     st.markdown(f"**Data source:** [CMS PFS indicators]({CMS_CSV_URL})")
     st.write("Autocomplete uses the actual public CMS descriptions and simple search aliases. 'Ask CMS' uses LangGraph routing and optional PDF chunk retrieval. The AI explanation is optional and needs an API key.")
     st.warning("Educational prototype: not medical advice, coding guidance, or a reimbursement determination. Verify current CMS rules and code effective dates.")
-st.caption("CMS Intelligence · V6 · Source-backed public-data research")
+st.caption("CMS Intelligence · V7 · Source-backed public-data research")
