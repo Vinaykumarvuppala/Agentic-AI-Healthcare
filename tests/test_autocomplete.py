@@ -22,3 +22,20 @@ def test_numeric_fragment_and_dedup():
 def test_empty_and_unknown():
     assert suggest(fixture(), "") == []
     assert suggest(fixture(), "nonmatchingxyz") == []
+
+def test_plain_language_aliases():
+    codes = [x["code"] for x in suggest(fixture(), "doctor visit")]
+    assert "99213" in codes
+
+def test_typo_fallback():
+    codes = [x["code"] for x in suggest(fixture(), "offce")]
+    assert "99213" in codes
+
+def test_numeric_prefix_wins():
+    rows = suggest(fixture(), "992", limit=2)
+    assert len(rows) == 2
+    assert all(x["code"].startswith("992") for x in rows)
+
+def test_limit_and_no_fuzzy_numeric():
+    assert len(suggest(fixture(), "office", limit=1)) == 1
+    assert suggest(fixture(), "998877") == []
