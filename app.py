@@ -81,12 +81,21 @@ with tab_search:
         st.markdown("**Popular searches**")
         choices = ["doctor visit", "99213", "22", "checkup", "x-ray"]
         cols = st.columns(len(choices))
-        for col, value in zip(cols,choices):
+        def select_popular_search(value):
+            # Streamlit callbacks run before widgets are instantiated on rerun.
+            st.session_state["search_v6"] = value
+            st.session_state.pop("selected_code_v6", None)
+            st.session_state.pop("semantic_request_v8", None)
+
+        for col, value in zip(cols, choices):
             with col:
-                if st.button(value, key="chip_"+value, use_container_width=True):
-                    st.session_state["search_v6"] = value
-                    st.session_state.pop("selected_code_v6",None)
-                    st.rerun()
+                st.button(
+                    value,
+                    key="chip_" + value,
+                    use_container_width=True,
+                    on_click=select_popular_search,
+                    args=(value,),
+                )
     else:
         hits = suggest(df, q, limit=80)
         if hits:
