@@ -9,6 +9,7 @@ from investigation import build_report
 from lifecycle import normalize_lifecycle, classify, SOURCE as LIFECYCLE_SOURCE
 from investigation_graph import make_investigation_graph
 from cms_quarterly import load_quarterly_changes, CMS_PAGE
+from etl_exports import jsonl, json_array, sqlserver_script, oracle_script
 from cms_agent import CMS_CSV_URL, VectorSearch, build_agent, build_documents, load_cms_data
 from llm_rag import answer_with_llm
 from policy_rag import load_policy_chunks
@@ -288,6 +289,27 @@ with tab_lifecycle:
                                        "cms_quarterly_changes.csv","text/csv",key="auto_export_v16")
                 st.markdown(f"[Official {older} ZIP]({links[older]}) · [Official {newer} ZIP]({links[newer]})")
                 st.warning("An appearance in a new snapshot is not necessarily a new code's original effective date. Removal from a snapshot is not proof of a termination date. Use official transaction records for that.")
+                with st.expander("Data Export / ETL — SQL Server, Oracle, JSON", expanded=False):
+                    st.caption("Exports the filtered comparison rows. Dates are NULL until verified code-level effective and termination dates are available.")
+                    export_format = st.selectbox("Choose destination",[
+                        "JSON Lines (S3 / Glue / Snowflake)",
+                        "JSON array (API / cloud storage)",
+                        "SQL Server (T-SQL)",
+                        "Oracle (SQL / PL-SQL)"
+                    ],key="etl_format_v17")
+                    if export_format.startswith("JSON Lines"):
+                        payload,filename,mime=jsonl(subset),"hcpcs_changes.jsonl","application/x-ndjson"
+                    elif export_format.startswith("JSON array"):
+                        payload,filename,mime=json_array(subset),"hcpcs_changes.json","application/json"
+                    elif export_format.startswith("SQL Server"):
+                        payload,filename,mime=sqlserver_script(subset),"hcpcs_changes_sqlserver.sql","application/sql"
+                    else:
+                        payload,filename,mime=oracle_script(subset),"hcpcs_changes_oracle.sql","application/sql"
+                    st.code(payload[:2800],language="json" if "JSON" in export_format else "sql")
+                    st.download_button("Download "+filename,payload.encode("utf-8"),
+                                       file_name=filename,mime=mime,key="etl_download_v17")
+                    st.caption(f"{len(subset):,} row(s) included. Script / JSON matches current filters.")
+
         except Exception as exc:
             st.error(f"Automatic CMS comparison unavailable: {exc}")
             st.markdown(f"[Download quarterly releases from CMS]({CMS_PAGE})")
@@ -439,4 +461,4 @@ with tab_info:
     st.markdown(f"**Data source:** [CMS PFS indicators]({CMS_CSV_URL})")
     st.write("Autocomplete uses the actual public CMS descriptions and simple search aliases. 'Ask CMS' uses LangGraph routing and optional PDF chunk retrieval. The AI explanation is optional and needs an API key.")
     st.warning("Educational prototype: not medical advice, coding guidance, or a reimbursement determination. Verify current CMS rules and code effective dates.")
-st.caption("CMS Intelligence · V16 · Automatic quarterly comparison")
+st.caption("CMS Intelligence · V17 · ETL exports")
