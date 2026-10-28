@@ -22,6 +22,10 @@ Under **Code lifecycle → Data Export / ETL**, choose **Load dated transaction 
 
 **Validation status:** Parsing is covered by synthetic-fixture tests, but a full live CMS October 2026 transaction workbook ingestion has **not** been verified. Production workflows should validate the source workbook and schema before using these dates.
 
+## Phase 3 — Persistent vectors and retrieval evaluation
+
+The **Project roadmap** tab includes two experimental labs: a small Chroma persistent vector index (up to 2,500 CMS records) and a four-question retrieval evaluation using recall@5 and mean reciprocal rank. Streamlit Community Cloud disk is ephemeral, so this is not durable cloud persistence. The small evaluation set is a demonstration, not a validated clinical benchmark. Both features are **prototypes requiring deployment testing**.
+
 ## Project roadmap dashboard
 
 The **Project roadmap** tab tracks implemented code, prototypes awaiting validation, planned capabilities, next engineering tasks and four development phases. It covers Python, ingestion, chunking, embeddings, vector databases, semantic search, RAG, LangChain, LangGraph, LLM comparison, SageMaker AI, Bedrock, Kubernetes, security and evaluation. Statuses are defined in `project_roadmap.py` and updated through code review; merely adding a file is not a production-readiness claim.
