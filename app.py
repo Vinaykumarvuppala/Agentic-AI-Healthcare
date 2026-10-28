@@ -8,6 +8,7 @@ from comparison_explain import summarize_differences
 from investigation import build_report
 from lifecycle import normalize_lifecycle, classify, SOURCE as LIFECYCLE_SOURCE
 from investigation_graph import make_investigation_graph
+from cms_quarterly import load_quarterly_changes, CMS_PAGE
 from cms_agent import CMS_CSV_URL, VectorSearch, build_agent, build_documents, load_cms_data
 from llm_rag import answer_with_llm
 from policy_rag import load_policy_chunks
@@ -256,6 +257,42 @@ with tab_lifecycle:
     with st.expander("How to prepare the CMS source data", expanded=False):
         st.write("Download the official CMS HCPCS Level II quarterly ZIP and locate its dated code/transaction records. Upload a CSV or Excel sheet with code, effective/add date, and termination date fields, or a normalized extract from those records. Map the columns below. The original raw fixed-width text is not yet parsed automatically.")
         st.caption("Level II only: letter-prefixed HCPCS codes. Numeric CPT/HCPCS Level I code dates require a separate licensed source.")
+    st.markdown("#### Automatic CMS release comparison")
+    st.caption("Compare official full quarterly ZIP snapshots. This detects added/removed/changed records between releases, not exact code-level effective or termination dates.")
+    @st.cache_data(ttl=86400,show_spinner="Downloading and checking official CMS ZIP files…")
+    def auto_changes(old_release,new_release):
+        return load_quarterly_changes(old_release,new_release)
+    lcol,rcol=st.columns(2)
+    with lcol: older=st.selectbox("Previous release",["July 2026","April 2026","January 2026"],key="old_auto_v16")
+    with rcol: newer=st.selectbox("Current release",["October 2026","July 2026"],key="new_auto_v16")
+    if st.button("Load official CMS changes",key="load_auto_v16",type="primary"):
+        st.session_state["auto_requested_v16"]=(older,newer)
+    if st.session_state.get("auto_requested_v16")== (older,newer):
+        try:
+            from datetime import datetime
+            release_dates={"January 2026":(2026,1),"April 2026":(2026,4),"July 2026":(2026,7),"October 2026":(2026,10)}
+            if release_dates[older]>=release_dates[newer]:
+                st.warning("Choose an older release followed by a newer release.")
+            else:
+                changes, links=auto_changes(older,newer)
+                st.success(f"{len(changes):,} changed code records between {older} and {newer}")
+                if not changes.empty:
+                    kinds=["All changes"]+sorted(changes["release_change"].unique().tolist())
+                    kind=st.selectbox("Change type",kinds,key="auto_kind_v16")
+                    subset=changes if kind=="All changes" else changes.loc[changes["release_change"]==kind]
+                    code_filter=st.text_input("Filter changed HCPCS codes",key="auto_code_v16")
+                    if code_filter.strip():
+                        subset=subset.loc[subset["code"].str.contains(code_filter.strip().upper(),regex=False)]
+                    st.dataframe(subset,hide_index=True,use_container_width=True)
+                    st.download_button("Download release changes CSV",subset.to_csv(index=False).encode("utf-8"),
+                                       "cms_quarterly_changes.csv","text/csv",key="auto_export_v16")
+                st.markdown(f"[Official {older} ZIP]({links[older]}) · [Official {newer} ZIP]({links[newer]})")
+                st.warning("An appearance in a new snapshot is not necessarily a new code's original effective date. Removal from a snapshot is not proof of a termination date. Use official transaction records for that.")
+        except Exception as exc:
+            st.error(f"Automatic CMS comparison unavailable: {exc}")
+            st.markdown(f"[Download quarterly releases from CMS]({CMS_PAGE})")
+    st.divider()
+    st.markdown("#### Exact effective/termination dates (dated transaction records)")
     upload = st.file_uploader("Upload dated HCPCS Level II CSV or Excel", type=["csv","xlsx"], key="hcpcs_lifecycle_upload_v15")
     if upload is not None:
         try:
@@ -402,4 +439,4 @@ with tab_info:
     st.markdown(f"**Data source:** [CMS PFS indicators]({CMS_CSV_URL})")
     st.write("Autocomplete uses the actual public CMS descriptions and simple search aliases. 'Ask CMS' uses LangGraph routing and optional PDF chunk retrieval. The AI explanation is optional and needs an API key.")
     st.warning("Educational prototype: not medical advice, coding guidance, or a reimbursement determination. Verify current CMS rules and code effective dates.")
-st.caption("CMS Intelligence · V15 · Code lifecycle and investigations")
+st.caption("CMS Intelligence · V16 · Automatic quarterly comparison")
