@@ -68,8 +68,13 @@ def oracle_script(frame, verified_dates=None):
 );
 -- Run CREATE TABLE once. Re-run only MERGE statements below for subsequent loads."""]
     # Avoid huge VARCHAR2 literal limits: 180-char snapshots are supported.
-    for r in records(frame):
-        val=lambda key: "NULL" if r[key] is None else "'"+r[key].replace("'","''")+"'"
+    for r in records(frame, verified_dates):
+        def val(key):
+            if r[key] is None:
+                return "NULL"
+            if key in ("effective_date", "termination_date"):
+                return "DATE '" + r[key] + "'"
+            return "'" + r[key].replace("'", "''") + "'"
         select=", ".join(val(k)+" AS "+k for k in COLS)
         lines.append("MERGE INTO cms_hcpcs_changes t USING (SELECT "+select+" FROM dual) s ON ("+
              "t.hcpcs_code=s.hcpcs_code AND t.older_release=s.older_release AND t.newer_release=s.newer_release) "+
