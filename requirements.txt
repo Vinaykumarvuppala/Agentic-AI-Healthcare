@@ -5,3 +5,4 @@ sentence-transformers>=3.0,<6
 numpy>=1.26,<3
 langgraph>=0.2,<2
 pytest>=8,<10
+openai>=1.40,<3
