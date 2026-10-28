@@ -4,6 +4,8 @@ import streamlit as st
 
 from cms_agent import CMS_CSV_URL, VectorSearch, build_agent, build_documents, load_cms_data
 from llm_rag import answer_with_llm
+from policy_rag import POLICIES, load_policy_chunks
+from research_agent import make_research_agent
 
 st.set_page_config(page_title="CMS Agent Lab", page_icon="🩺", layout="wide")
 st.title("CMS Agent Lab")
@@ -89,3 +91,80 @@ with st.expander("Architecture and safeguards"):
     optional LLM explanations with citations, read-only SQL tools, human review,
     Docker/Kubernetes deployment, and evaluation datasets.
     """)
+
+
+# V5: keep the original lookup working, add a distinct conversational research lab.
+st.divider()
+st.header("CMS Research Assistant · V5")
+st.caption("Experimental LangGraph tool routing · CMS PDF chunking · source-linked evidence")
+@st.cache_resource(show_spinner="Downloading CMS guidance and embedding policy chunks…")
+def get_policy_engine(version: str):
+    return VectorSearch(load_policy_chunks("CMS E/M Services Guide (Sep 2025)"))
+
+if "research_history" not in st.session_state:
+    st.session_state.research_history = []
+
+source_choice = st.selectbox("Evidence source", ["Auto", "CMS procedure codes", "CMS policy PDF"],
+                             help="Auto routes billing/documentation questions to the CMS E/M policy PDF.")
+llm_research = st.checkbox("Summarize retrieved evidence using LLM (needs OPENAI_API_KEY)", key="v5_llm")
+for exchange in st.session_state.research_history:
+    with st.chat_message("user"):
+        st.write(exchange["question"])
+    with st.chat_message("assistant"):
+        st.markdown(exchange["answer"])
+        if exchange.get("llm"):
+            st.markdown("**AI explanation (experimental)**")
+            st.markdown(exchange["llm"])
+        with st.expander("Sources and agent execution"):
+            for cit in exchange["citations"]:
+                label = f"Source [{cit['number']}]"
+                if cit["page"]:
+                    label += f", PDF page {cit['page']}"
+                st.markdown(f"**{label}:** [View official CMS source]({cit['url']})")
+                st.caption(cit["excerpt"])
+            st.code("\n".join(exchange["trace"]), language="text")
+
+prompt = st.chat_input("Ask about E/M documentation, G2211, office visit codes, or CMS policies")
+if prompt:
+    with st.chat_message("user"):
+        st.write(prompt)
+    with st.chat_message("assistant"):
+        try:
+            with st.spinner("Retrieving public CMS evidence…"):
+                # Source-specific lazy loading so HCPCS lookup does not download the PDF model.
+                policy_needed = source_choice == "CMS policy PDF" or (
+                    source_choice == "Auto" and any(
+                        token in prompt.lower() for token in
+                        ("documentation", "guideline", "policy", "modifier", "medical decision", "g2211", "billing rule")
+                    )
+                )
+                # Both branches accept the same interface; unused source is never invoked.
+                code_index = get_search_engine("intent-aware-v4") if not policy_needed else None
+                policy_index = get_policy_engine("cms-em-2025-v1") if policy_needed else None
+                result = make_research_agent(code_index, policy_index).invoke(
+                    {"question": prompt, "source": source_choice}
+                )
+            st.markdown(result["answer"])
+            llm_text = ""
+            if llm_research and result.get("evidence"):
+                try:
+                    llm_text = answer_with_llm(prompt, result["evidence"])
+                    st.markdown("**AI explanation (experimental)**")
+                    st.markdown(llm_text)
+                except Exception as exc:
+                    st.warning(f"LLM explanation unavailable: {exc}")
+            with st.expander("Sources and agent execution", expanded=True):
+                for cit in result["citations"]:
+                    label = f"Source [{cit['number']}]"
+                    if cit["page"]:
+                        label += f", PDF page {cit['page']}"
+                    st.markdown(f"**{label}:** [View official CMS source]({cit['url']})")
+                    st.caption(cit["excerpt"])
+                st.code("\n".join(result["trace"]), language="text")
+            st.session_state.research_history.append({
+                "question": prompt, "answer": result["answer"], "llm": llm_text,
+                "citations": result["citations"], "trace": result["trace"]
+            })
+        except Exception as exc:
+            st.error(f"Research assistant could not retrieve evidence: {exc}")
+st.caption("Public research only. Not medical, legal, billing or reimbursement advice; verify CMS effective dates.")
