@@ -8,6 +8,10 @@ Try public CMS procedure-code lookup and semantic search directly in your browse
 
 A runnable Python project using **real, publicly available CMS Physician Fee Schedule data**, local semantic embeddings, and a **LangGraph** routing/retrieval workflow.
 
+## V11 — Filter results and inspect procedure details
+
+Meaning-based results now include a **Filter related results** dropdown with broad HCPCS/code-family browsing categories, and pagination runs over the filtered result set without recomputing embeddings. Categories are navigation aids, not verified medical specialties. Selecting any procedure opens a concise details card with description, modifier, status and a collapsible view of underlying CMS fields, plus a source link and Clear button.
+
 ## V10 — Browse more semantic matches
 
 Click **Find related services by meaning** directly under the main search box. Results show six at a time with **Previous / Next** paging, and up to 60 distinct semantic candidates. Results are kept in session state so paging does not repeat model work. When the search is a code fragment containing digits (for example `9921`), discovery switches to prefix-aware code matching, returning up to 150 codes rather than five semantically unrelated results. The main instant suggestions remain available below.
