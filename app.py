@@ -52,30 +52,30 @@ with tab_search:
         st.session_state["last_query_v7"] = q
         st.session_state.pop("semantic_request_v8", None)
     if q.strip():
-    # Single search input: direct results render immediately; users can
-    # request a deeper vector search without learning a second interface.
-    if st.button("✨ Find related services by meaning", key="semantic_fallback_v8", use_container_width=True):
-        st.session_state["semantic_request_v8"] = q
-    if st.session_state.get("semantic_request_v8") == q:
-        try:
-            with st.spinner("Searching CMS codes by meaning…"):
-                results = build_agent(code_engine("hybrid-v8")).invoke({"question": q}).get("results", [])
-            st.markdown("**AI-powered related procedures**")
-            seen = set()
-            for idx, item in enumerate(results):
-                code = item["hcpc"]
-                if code in seen:
-                    continue
-                seen.add(code)
-                if st.button(f"{code}   ·   {item['description']}", key=f"semantic_{idx}_{code}", use_container_width=True):
-                    st.session_state["selected_code_v6"] = code
-            if not seen:
-                st.caption("No related procedures found.")
-            st.caption("Semantic results are approximate. Confirm codes against CMS documentation.")
-        except Exception as exc:
-            st.warning(f"Meaning-based search is unavailable: {exc}")
+        # Single search input: direct results render immediately; users can
+        # request a deeper vector search without learning a second interface.
+        if st.button("✨ Find related services by meaning", key="semantic_fallback_v8", use_container_width=True):
+            st.session_state["semantic_request_v8"] = q
+        if st.session_state.get("semantic_request_v8") == q:
+            try:
+                with st.spinner("Searching CMS codes by meaning…"):
+                    results = build_agent(code_engine("hybrid-v8")).invoke({"question": q}).get("results", [])
+                st.markdown("**AI-powered related procedures**")
+                seen = set()
+                for idx, item in enumerate(results):
+                    code = item["hcpc"]
+                    if code in seen:
+                        continue
+                    seen.add(code)
+                    if st.button(f"{code}   ·   {item['description']}", key=f"semantic_{idx}_{code}", use_container_width=True):
+                        st.session_state["selected_code_v6"] = code
+                if not seen:
+                    st.caption("No related procedures found.")
+                st.caption("Semantic results are approximate. Confirm codes against CMS documentation.")
+            except Exception as exc:
+                st.warning(f"Meaning-based search is unavailable: {exc}")
 
-        st.divider()
+            st.divider()
     if not q.strip():
         st.caption("Start typing to see matching procedures. Search descriptions, partial codes, or common terms.")
         st.markdown("**Popular searches**")
