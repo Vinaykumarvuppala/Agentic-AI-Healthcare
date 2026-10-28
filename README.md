@@ -22,6 +22,10 @@ Under **Code lifecycle → Data Export / ETL**, choose **Load dated transaction 
 
 **Validation status:** Parsing is covered by synthetic-fixture tests, but a full live CMS October 2026 transaction workbook ingestion has **not** been verified. Production workflows should validate the source workbook and schema before using these dates.
 
+## V21 — Configure ETL output fields and date window
+
+In **Code lifecycle → Load official CMS changes → Data Export / ETL**, select only the output columns you need. Choose **No date filter**, **Verified effective date**, or **Verified termination date**, and enter an inclusive start/end date. Export to SQL Server, Oracle, JSON or JSONL. DDL and INSERT statements contain only chosen columns; JSON keys follow the same selection. A date filter excludes records without explicit verified dates. No quarterly publication date is substituted. Custom SQL exports are insert-only and can duplicate data if rerun; review before executing in production.
+
 ## V17 — SQL Server, Oracle, cloud JSON exports
 
 The Code lifecycle tab has a **Data Export / ETL** expander after automatically comparing two CMS quarterly releases. It exports the **currently filtered** changes as JSON array, JSONL for S3/Glue/cloud ingestion, SQL Server T-SQL with create-if-missing and duplicate-safe inserts, or Oracle SQL with create-table and MERGE statements. Core columns: `hcpcs_code`, `change_type`, `old_record`, `new_record`, `older_release`, `newer_release`, `effective_date`, `termination_date`, `date_source`. **Dates remain NULL for a snapshot difference**: they must not be substituted with quarterly release dates. The ETL export panel can optionally map and join a separate dated HCPCS Level II CSV/Excel extract; only unique, explicitly dated records supply effective/termination dates. Review the source provenance before using these fields. Oracle initial table DDL should run only once; reruns can execute MERGEs alone. This is a prototype bulk export, not an optimized high-volume load. Do not run unreviewed SQL in production.
