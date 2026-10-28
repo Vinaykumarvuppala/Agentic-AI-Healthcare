@@ -8,6 +8,12 @@ Try public CMS procedure-code lookup and semantic search directly in your browse
 
 A runnable Python project using **real, publicly available CMS Physician Fee Schedule data**, local semantic embeddings, and a **LangGraph** routing/retrieval workflow.
 
+## V7 — Smarter search
+
+Autocomplete now distinguishes exact codes, code prefixes, description phrases and numerical fragments, supports everyday aliases (e.g. "doctor visit", "checkup", "x-ray"), and uses conservative spelling correction as a fallback for inputs such as "offce". The search remains fast and deterministic; it does not require an LLM or charge API fees.
+
+Selected-code details reset when the query changes, avoiding stale code information. Tests cover code fragments, duplicate prevention, natural-language aliases, and typo fallback.
+
 ## V6 — Search-first experience
 
 The landing page now has three clear tabs: **Find a service**, **Ask CMS**, and **About**. A single prominent search field provides live ranked suggestions across public CMS procedure descriptions and partial HCPCS code matches. Six suggestions appear immediately, with up to 74 additional matches in a scrollable section. Selecting a match opens source fields and modifier variants. Semantic retrieval remains available under an Advanced expander, not as a competing landing-page form.
