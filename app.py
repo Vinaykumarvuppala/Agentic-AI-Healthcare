@@ -291,6 +291,22 @@ with tab_lifecycle:
                 st.warning("An appearance in a new snapshot is not necessarily a new code's original effective date. Removal from a snapshot is not proof of a termination date. Use official transaction records for that.")
                 with st.expander("Data Export / ETL — SQL Server, Oracle, JSON", expanded=False):
                     st.caption("Exports the filtered comparison rows. Dates are NULL until verified code-level effective and termination dates are available.")
+                    verified = None
+                    dated_upload = st.file_uploader("Optional: attach verified code-level effective / termination dates (CSV or XLSX)",type=["csv","xlsx"],key="etl_dated_v17")
+                    if dated_upload is not None:
+                        try:
+                            dates_raw = pd.read_csv(dated_upload,dtype=str) if dated_upload.name.lower().endswith(".csv") else pd.read_excel(dated_upload,dtype=str)
+                            date_columns = list(dates_raw.columns)
+                            mapped_code = st.selectbox("Date source: HCPCS code column",date_columns,key="etl_map_code_v17")
+                            mapped_effective = st.selectbox("Date source: effective date column",date_columns,key="etl_map_effective_v17")
+                            mapped_term = st.selectbox("Date source: termination date column",date_columns,key="etl_map_term_v17")
+                            if len({mapped_code,mapped_effective,mapped_term})!=3:
+                                st.warning("Map three distinct columns before exporting with dates.")
+                            else:
+                                verified = normalize_lifecycle(dates_raw,{"code":mapped_code,"effective_date":mapped_effective,"termination_date":mapped_term})
+                                st.success(f"{len(verified):,} valid dated Level II record(s) available for matching.")
+                        except Exception as date_error:
+                            st.warning(f"Dated data not usable: {date_error}")
                     export_format = st.selectbox("Choose destination",[
                         "JSON Lines (S3 / Glue / Snowflake)",
                         "JSON array (API / cloud storage)",
@@ -298,13 +314,13 @@ with tab_lifecycle:
                         "Oracle (SQL / PL-SQL)"
                     ],key="etl_format_v17")
                     if export_format.startswith("JSON Lines"):
-                        payload,filename,mime=jsonl(subset),"hcpcs_changes.jsonl","application/x-ndjson"
+                        payload,filename,mime=jsonl(subset,verified),"hcpcs_changes.jsonl","application/x-ndjson"
                     elif export_format.startswith("JSON array"):
-                        payload,filename,mime=json_array(subset),"hcpcs_changes.json","application/json"
+                        payload,filename,mime=json_array(subset,verified),"hcpcs_changes.json","application/json"
                     elif export_format.startswith("SQL Server"):
-                        payload,filename,mime=sqlserver_script(subset),"hcpcs_changes_sqlserver.sql","application/sql"
+                        payload,filename,mime=sqlserver_script(subset,verified),"hcpcs_changes_sqlserver.sql","application/sql"
                     else:
-                        payload,filename,mime=oracle_script(subset),"hcpcs_changes_oracle.sql","application/sql"
+                        payload,filename,mime=oracle_script(subset,verified),"hcpcs_changes_oracle.sql","application/sql"
                     st.code(payload[:2800],language="json" if "JSON" in export_format else "sql")
                     st.download_button("Download "+filename,payload.encode("utf-8"),
                                        file_name=filename,mime=mime,key="etl_download_v17")
