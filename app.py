@@ -6,6 +6,7 @@ from cms_agent import CMS_CSV_URL, VectorSearch, build_agent, build_documents, l
 from llm_rag import answer_with_llm
 from policy_rag import POLICIES, load_policy_chunks
 from research_agent import make_research_agent
+from autocomplete import suggest
 
 st.set_page_config(page_title="CMS Agent Lab", page_icon="🩺", layout="wide")
 st.title("CMS Agent Lab")
@@ -32,6 +33,37 @@ c1.metric("CMS rows", f"{len(df):,}")
 c2.metric("Unique HCPCS codes", f"{df['hcpc'].nunique():,}")
 c3.metric("Data year", "2026")
 st.markdown(f"**Official source:** [CMS Physician Fee Schedule Indicators]({CMS_CSV_URL})")
+
+st.markdown("""
+<style>
+.block-container {max-width: 1180px; padding-top: 1.8rem;}
+div[data-testid="stMetric"] {background: #f3f7fc; border: 1px solid #dce7f3; padding: 15px 18px; border-radius: 15px;}
+div[data-testid="stMetricLabel"] {font-weight: 600;}
+div[data-testid="stTextInput"] input {border-radius: 12px;}
+div[data-testid="stSelectbox"] > div {border-radius: 12px;}
+ul[role="listbox"] {max-height: 260px !important; overflow-y: auto !important;}
+</style>
+""", unsafe_allow_html=True)
+
+st.subheader("🔎 Smart Procedure Finder")
+st.caption("Search all CMS procedure descriptions or code fragments. Type **office**, **visit**, **22**, or **992**.")
+typed = st.text_input("Find a code or service", placeholder="Try: office visits, 22, 99213, x-ray…", key="smart_query")
+if typed.strip():
+    hits = suggest(df, typed, limit=80)
+    if hits:
+        st.caption(f"{len(hits)} matching suggestions shown · Top matches first · Scroll dropdown for more")
+        options = ["Select a suggestion…"] + [f"{x['code']}  |  {x['description']}" for x in hits]
+        selection = st.selectbox("Matching procedures (scroll for more)", options, key="smart_selection")
+        if selection != options[0]:
+            selected_code = selection.split("  |  ", 1)[0]
+            matching = df[df["hcpc"] == selected_code]
+            st.success(f"Selected {selected_code}")
+            cols = [a for a in ("hcpc","modifier","sdesc","proc_stat","nfac_total","fac_total","conv_fact") if a in matching.columns]
+            st.dataframe(matching[cols], hide_index=True, use_container_width=True)
+            st.caption("All code variants/modifiers shown; this is not a reimbursement quote.")
+    else:
+        st.warning("No matching CMS procedure records. Try another phrase or number.")
+st.divider()
 
 mode = st.radio("Search mode", ["HCPCS code lookup", "Semantic meaning search"], horizontal=True)
 if mode == "HCPCS code lookup":
