@@ -3,6 +3,7 @@ import pandas as pd
 import streamlit as st
 
 from cms_agent import CMS_CSV_URL, VectorSearch, build_agent, build_documents, load_cms_data
+from llm_rag import answer_with_llm
 
 st.set_page_config(page_title="CMS Agent Lab", page_icon="🩺", layout="wide")
 st.title("CMS Agent Lab")
@@ -47,6 +48,11 @@ else:
             search = get_search_engine()
             result = build_agent(search).invoke({"question": question})
             st.markdown(result["answer"])
+            if st.checkbox("Generate an LLM explanation with cited evidence (requires OPENAI_API_KEY)"):
+                try:
+                    st.markdown(answer_with_llm(question, result["results"]))
+                except Exception as llm_exc:
+                    st.warning(f"LLM explanation unavailable: {llm_exc}")
             st.subheader("Retrieved evidence")
             for item in result["results"]:
                 st.write(f"**{item['hcpc']} — {item['description']}**")
