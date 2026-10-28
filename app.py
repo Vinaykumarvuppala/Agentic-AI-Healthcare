@@ -15,7 +15,7 @@ def get_data() -> pd.DataFrame:
     return load_cms_data()
 
 @st.cache_resource(show_spinner="Building vector embeddings (first run may take several minutes)…")
-def get_search_engine():
+def get_search_engine(index_version: str):
     return VectorSearch(build_documents(get_data()))
 
 try:
@@ -42,13 +42,29 @@ if mode == "HCPCS code lookup":
         st.dataframe(rows[shown], use_container_width=True, hide_index=True)
         st.caption("RVUs, indicator values, and conversion factors are not a final payable amount.")
 else:
+    st.caption("Search version: dedup-medical-v3 · distinct HCPCS results")
     question = st.text_input("Ask about services", value="Which procedures relate to office visits?")
     use_llm = st.checkbox("Generate an LLM explanation with cited evidence (requires OPENAI_API_KEY)")
     if st.button("Ask the retrieval agent", type="primary") and question.strip():
         try:
-            search = get_search_engine()
+            search = get_search_engine("dedup-medical-v3")
             result = build_agent(search).invoke({"question": question})
-            st.markdown(result["answer"])
+            # Defense in depth: dedupe the displayed evidence even when an
+            # older cached index or repeated source rows were encountered.
+            unique_results = []
+            seen_codes = set()
+            for item in result["results"]:
+                code = item["hcpc"]
+                if code not in seen_codes:
+                    unique_results.append(item)
+                    seen_codes.add(code)
+            result["results"] = unique_results
+            if len(unique_results) < 5:
+                st.caption("Showing distinct HCPCS codes only.")
+            st.markdown("### Relevant CMS codes")
+            for item in unique_results:
+                st.markdown(f"- **{item['hcpc']}** — {item['description']} (modifier: {item['modifier'] or 'none'}, status: {item['procedure_status'] or 'not specified'})")
+
             if use_llm:
                 try:
                     st.markdown(answer_with_llm(question, result["results"]))
