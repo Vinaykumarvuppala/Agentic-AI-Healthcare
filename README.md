@@ -8,6 +8,10 @@ Try public CMS procedure-code lookup and semantic search directly in your browse
 
 A runnable Python project using **real, publicly available CMS Physician Fee Schedule data**, local semantic embeddings, and a **LangGraph** routing/retrieval workflow.
 
+## Smart Procedure Finder
+
+Type any HCPCS code, partial code (such as `22` or `992`), or service phrase (such as `office`). The app ranks up to 80 suggestions, displays the first several in a scrollable dropdown, and lets you inspect all modifier variants of the selected code. Unlike the embedding search, this fast autocomplete is deterministic and requires no LLM API.
+
 ## V5 CMS Research Assistant
 
 The app now includes a chat-style research interface (below the code-search tool) that routes questions with LangGraph between **procedure-code retrieval** and a public **CMS Evaluation and Management Services** guidance PDF. Policy PDF text is extracted page-by-page, chunked with overlap, embedded locally, and returned with page/source links and an execution trace. API-key-enabled LLM synthesis is optional; the default response is extractive, not a generated policy interpretation.
