@@ -11,6 +11,7 @@ from investigation_graph import make_investigation_graph
 from cms_quarterly import load_quarterly_changes, CMS_PAGE
 from etl_exports import jsonl, json_array, sqlserver_script, oracle_script
 from cms_transactions import fetch_dated_release
+from cms_source_diagnostics import inspect_archive
 from cms_agent import CMS_CSV_URL, VectorSearch, build_agent, build_documents, load_cms_data
 from llm_rag import answer_with_llm
 from policy_rag import load_policy_chunks
@@ -306,6 +307,21 @@ with tab_lifecycle:
                             st.caption("Dates come from explicit CMS transaction fields, not release dates. Conflicting records are excluded.")
                         except Exception as date_exc:
                             st.warning(f"Automatic date extraction unavailable: {date_exc}. You can still upload mapped dated records.")
+                    with st.expander("Inspect CMS ZIP workbook layout (diagnostics)"):
+                        st.caption("Use this when automatic date extraction fails. The report lists real sheet names and candidate headers without guessing field positions.")
+                        zip_upload=st.file_uploader("Upload official quarterly CMS ZIP for schema inspection",type=["zip"],key="diag_zip_v19")
+                        if zip_upload is not None:
+                            try:
+                                details=inspect_archive(zip_upload.getvalue())
+                                if details:
+                                    st.dataframe(pd.DataFrame(details),hide_index=True,use_container_width=True)
+                                    st.download_button("Download schema diagnostic JSON",
+                                        pd.DataFrame(details).to_json(orient="records",indent=2).encode("utf-8"),
+                                        "cms_schema_diagnostic.json","application/json",key="diag_export_v19")
+                                else:
+                                    st.warning("No .xlsx workbooks found inside this ZIP.")
+                            except Exception as diagnostic_error:
+                                st.error(f"Could not inspect ZIP: {diagnostic_error}")
                     dated_upload = st.file_uploader("Optional: attach verified code-level effective / termination dates (CSV or XLSX)",type=["csv","xlsx"],key="etl_dated_v17")
                     if dated_upload is not None:
                         try:
