@@ -8,6 +8,10 @@ Try public CMS procedure-code lookup and semantic search directly in your browse
 
 A runnable Python project using **real, publicly available CMS Physician Fee Schedule data**, local semantic embeddings, and a **LangGraph** routing/retrieval workflow.
 
+## V13 — Explain code differences with evidence
+
+The **Compare codes** tab now includes **Why are these codes different?**, which explains differences in the actual CMS fields without claiming that either code is medically appropriate. An optional **Retrieve official guidance** button searches chunks of the configured CMS Evaluation and Management PDF, providing source URLs and page references. Retrieval is not proof of code applicability; check coding rules, effective dates, and the complete source before making decisions.
+
 ## V12 — Side-by-side HCPCS comparison
 
 The **Compare codes** tab supports searchable HCPCS selectors, such as 99213 vs 99214. It only compares common modifier variants to avoid misleading comparisons. A table highlights differences in description, procedure status, RVU totals, and conversion-factor fields, with a differences-only filter and downloadable CSV. These are reference fields, **not** calculated reimbursement amounts.
