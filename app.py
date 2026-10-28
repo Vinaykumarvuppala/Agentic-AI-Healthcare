@@ -3,6 +3,7 @@ import os
 import pandas as pd
 import streamlit as st
 from autocomplete import suggest
+from comparison import compare_codes, variants
 from cms_agent import CMS_CSV_URL, VectorSearch, build_agent, build_documents, load_cms_data
 from llm_rag import answer_with_llm
 from policy_rag import load_policy_chunks
@@ -42,7 +43,7 @@ except Exception as exc:
 st.title("CMS Intelligence")
 st.write("**Find a medical service, explore HCPCS codes, or ask a question about CMS guidance.**")
 st.caption("Public CMS Physician Fee Schedule indicators · Educational research · 2026")
-tab_search, tab_ask, tab_info = st.tabs(["🔎 Find a service", "💬 Ask CMS", "ℹ️ About"])
+tab_search, tab_compare, tab_ask, tab_info = st.tabs(["🔎 Find a service", "⚖️ Compare codes", "💬 Ask CMS", "ℹ️ About"])
 
 with tab_search:
     st.subheader("What are you looking for?")
@@ -183,6 +184,42 @@ with tab_search:
                 st.markdown(f"[Official CMS PFS data source]({CMS_CSV_URL})")
                 st.caption("This is a code reference, not a payable amount or coding recommendation.")
 
+
+with tab_compare:
+    st.subheader("Compare two HCPCS codes")
+    st.caption("Search for two procedures, select matching modifier variants, and review their CMS fields side by side.")
+    codes = sorted(df["hcpc"].dropna().astype(str).str.upper().unique().tolist())
+    a_col,b_col = st.columns(2)
+    with a_col:
+        left = st.selectbox("First procedure", codes, index=codes.index("99213") if "99213" in codes else 0,
+                            key="compare_left_v12")
+    with b_col:
+        right = st.selectbox("Second procedure", codes, index=codes.index("99214") if "99214" in codes else min(1,len(codes)-1),
+                             key="compare_right_v12")
+    if left == right:
+        st.info("Choose two different codes to compare.")
+    else:
+        available_a = set(variants(df,left))
+        available_b = set(variants(df,right))
+        common = sorted(available_a & available_b)
+        if not common:
+            st.warning("These codes have no common modifier variant. Choose other codes for a like-for-like comparison.")
+        else:
+            modifier = st.selectbox("Common modifier", common, format_func=lambda m:m or "No modifier",key="compare_modifier_v12")
+            try:
+                table = compare_codes(df,left,right,modifier)
+                only_diff = st.checkbox("Show differences only", key="compare_diff_v12")
+                if only_diff:
+                    table = table.loc[table["Different"] == "Yes"]
+                st.dataframe(table, use_container_width=True, hide_index=True)
+                st.download_button("Download comparison CSV", table.to_csv(index=False).encode("utf-8"),
+                                   file_name=f"cms_compare_{left}_{right}.csv", mime="text/csv", key="compare_download_v12")
+                st.caption("RVU and conversion-factor columns are displayed as published. No payment amounts are calculated.")
+            except ValueError as exc:
+                st.warning(str(exc))
+    st.markdown(f"[CMS source data]({CMS_CSV_URL})")
+
+
 with tab_ask:
     st.subheader("Ask a question about CMS")
     st.caption("Retrieves public procedure records or CMS E/M policy passages. Answers include sources.")
@@ -235,4 +272,4 @@ with tab_info:
     st.markdown(f"**Data source:** [CMS PFS indicators]({CMS_CSV_URL})")
     st.write("Autocomplete uses the actual public CMS descriptions and simple search aliases. 'Ask CMS' uses LangGraph routing and optional PDF chunk retrieval. The AI explanation is optional and needs an API key.")
     st.warning("Educational prototype: not medical advice, coding guidance, or a reimbursement determination. Verify current CMS rules and code effective dates.")
-st.caption("CMS Intelligence · V11 · Filters and clear procedure details")
+st.caption("CMS Intelligence · V12 · Compare CMS codes")
