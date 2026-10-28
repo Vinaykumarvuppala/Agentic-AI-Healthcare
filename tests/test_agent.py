@@ -15,3 +15,13 @@ def test_code_extraction():
     assert extract_hcpcs("Tell me about 99213 reimbursement") == "99213"
     assert extract_hcpcs("What is G2211?") == "G2211"
     assert extract_hcpcs("outpatient services") is None
+
+
+def test_document_dedup_preserves_distinct_modifiers():
+    df = pd.DataFrame([
+        {"hcpc":"D9430","sdesc":"Office visit during hours","year":"2026","modifier":"","proc_stat":"R"},
+        {"hcpc":"D9430","sdesc":"Office visit during hours","year":"2026","modifier":"","proc_stat":"R"},
+        {"hcpc":"D9430","sdesc":"Office visit during hours","year":"2026","modifier":"26","proc_stat":"R"},
+    ])
+    docs = build_documents(normalize_columns(df))
+    assert len(docs) == 2
