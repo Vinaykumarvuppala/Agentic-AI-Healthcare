@@ -8,6 +8,7 @@ import re
 import pandas as pd
 from cms_quarterly import CMS_PAGE, discover_releases, download_bytes, RELEASES
 from lifecycle import clean_date
+from cms_source_diagnostics import inspect_archive
 
 def _norm(text):
     return re.sub(r"[^a-z0-9]+", "", str(text).lower())
@@ -33,7 +34,7 @@ def parse_transaction_workbook(blob: bytes, source: str) -> pd.DataFrame:
                 names=[str(v).strip() if pd.notna(v) else "" for v in raw.iloc[index].tolist()]
                 code_col=_find(names,["HCPCS","HCPCS Code","HCPCS Level II Code","Code"])
                 eff_col=_find(names,["Effective Date","Action Effective Date","HCPCS Action Effective Date","Add Date"])
-                term_col=_find(names,["Termination Date","Term Date","HCPCS Termination Date"])
+                term_col=_find(names,["Termination Date","Term Date","HCPCS Termination Date","Deletion Date","Discontinuation Date"])
                 if code_col is None or (eff_col is None and term_col is None):
                     continue
                 data=raw.iloc[index+1:].copy()
@@ -54,8 +55,10 @@ def parse_transaction_workbook(blob: bytes, source: str) -> pd.DataFrame:
         if not rows:
             raise ValueError("No unambiguous dated code rows found; CMS workbook layout needs mapping")
         result=pd.DataFrame(rows).drop_duplicates()
-        conflicts=result.groupby("code")[["effective_date","termination_date"]].nunique(dropna=True)
-        ambiguous=set(conflicts.index[(conflicts>1).any(axis=1)])
+        # Multiple rows for the same code can represent distinct events.
+        # Do not collapse them into a single effective/termination period.
+        counts=result.groupby("code").size()
+        ambiguous=set(counts.index[counts>1])
         result=result.loc[~result["code"].isin(ambiguous)]
         if result.empty:
             raise ValueError("All dated codes had conflicting source records")
@@ -69,3 +72,15 @@ def fetch_dated_release(release: str):
     if release not in links:
         raise ValueError("Official release not found: "+release)
     return parse_transaction_workbook(download_bytes(links[release]),links[release])
+
+
+def inspect_official_release(release: str):
+    """Download the official source and return safe schema diagnostic metadata."""
+    import requests
+    page=requests.get(CMS_PAGE,timeout=30)
+    page.raise_for_status()
+    links=discover_releases(page.text)
+    if release not in links:
+        raise ValueError("Official release not found: "+release)
+    data=download_bytes(links[release])
+    return inspect_archive(data),links[release]
