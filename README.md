@@ -8,6 +8,10 @@ Try public CMS procedure-code lookup and semantic search directly in your browse
 
 A runnable Python project using **real, publicly available CMS Physician Fee Schedule data**, local semantic embeddings, and a **LangGraph** routing/retrieval workflow.
 
+## V20 — Automatic official CMS archive layout inspection
+
+The ETL panel now offers **Inspect official CMS transaction file automatically**. The app fetches the selected release's CMS ZIP itself, identifies workbook filenames/sheets, and reports candidate headers before any dates are trusted. This eliminates the earlier manual ZIP-upload requirement for diagnostics. Transaction-date parsing now rejects codes with multiple distinct dated event records rather than arbitrarily selecting a date. **Actual October 2026 workbook parsing remains unverified**, because a direct archive download was not available in the development environment. Any missing or ambiguous dates remain unknown.
+
 ## V19 — CMS ZIP structure diagnostics
 
 The ETL section includes **Inspect CMS ZIP workbook layout**: upload an official CMS ZIP and inspect workbook filenames, sheet names, and possible HCPCS header rows. Download the diagnostic as JSON to help map the actual transaction columns. This is especially useful when automatic effective/termination date extraction fails. The live October 2026 archive could not be inspected in the development environment; no unverified date assumptions were introduced.
