@@ -8,6 +8,10 @@ Try public CMS procedure-code lookup and semantic search directly in your browse
 
 A runnable Python project using **real, publicly available CMS Physician Fee Schedule data**, local semantic embeddings, and a **LangGraph** routing/retrieval workflow.
 
+## V14 — Guided investigation report
+
+In the **Investigate** tab, select a code, enter a research question and generate a Markdown analyst report. The workflow checks public CMS source rows, optionally retrieves passages from the configured CMS E/M guide for relevant office/outpatient code families, and produces source-linked findings, uncertainties, next steps and execution trace. Download the report as Markdown. No API key required; it does not infer real-world billing compliance or payment decisions.
+
 ## V13 — Explain code differences with evidence
 
 The **Compare codes** tab now includes **Why are these codes different?**, which explains differences in the actual CMS fields without claiming that either code is medically appropriate. An optional **Retrieve official guidance** button searches chunks of the configured CMS Evaluation and Management PDF, providing source URLs and page references. Retrieval is not proof of code applicability; check coding rules, effective dates, and the complete source before making decisions.
