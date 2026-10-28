@@ -17,4 +17,4 @@ jobs:
       - name: Run unit tests
         run: pytest -q
       - name: Check syntax
-        run: python -m compileall -q app.py cms_agent.py llm_rag.py policy_rag.py research_agent.py comparison.py comparison_explain.py investigation.py lifecycle.py investigation_graph.py cms_quarterly.py etl_exports.py cms_transactions.py cms_source_diagnostics.py custom_etl.py project_roadmap.py autocomplete.py
+        run: python -m compileall -q app.py cms_agent.py llm_rag.py policy_rag.py research_agent.py comparison.py comparison_explain.py investigation.py lifecycle.py investigation_graph.py cms_quarterly.py etl_exports.py cms_transactions.py cms_source_diagnostics.py custom_etl.py project_roadmap.py vector_lab.py retrieval_eval.py autocomplete.py
