@@ -9,7 +9,8 @@ from investigation import build_report
 from lifecycle import normalize_lifecycle, classify, SOURCE as LIFECYCLE_SOURCE
 from investigation_graph import make_investigation_graph
 from cms_quarterly import load_quarterly_changes, CMS_PAGE
-from etl_exports import jsonl, json_array, sqlserver_script, oracle_script
+from etl_exports import jsonl, json_array, sqlserver_script, oracle_script, COLS
+from custom_etl import export_rows, render_export
 from cms_agent import CMS_CSV_URL, VectorSearch, build_agent, build_documents, load_cms_data
 from llm_rag import answer_with_llm
 from policy_rag import load_policy_chunks
@@ -354,24 +355,67 @@ with tab_lifecycle:
                                 st.success(f"{len(verified):,} valid dated Level II record(s) available for matching.")
                         except Exception as date_error:
                             st.warning(f"Dated data not usable: {date_error}")
-                    export_format = st.selectbox("Choose destination",[
+                    st.markdown("#### Configure export columns and dates")
+                    field_labels = {
+                        "hcpcs_code":"HCPCS code","change_type":"Change type",
+                        "old_record":"Prior record","new_record":"Current record",
+                        "older_release":"Previous release","newer_release":"Current release",
+                        "effective_date":"Effective date (verified only)",
+                        "termination_date":"Termination date (verified only)",
+                        "date_source":"Date provenance"
+                    }
+                    chosen_fields = st.multiselect(
+                        "Choose fields to export (only these columns will appear)",
+                        options=list(COLS),
+                        default=["hcpcs_code","change_type","new_record","effective_date","termination_date"],
+                        format_func=lambda k: field_labels[k],
+                        key="etl_fields_v21"
+                    )
+                    date_mode = st.radio(
+                        "Date range filter",["No date filter","Filter by verified effective date","Filter by verified termination date"],
+                        horizontal=True,key="etl_date_mode_v21"
+                    )
+                    begin = finish = None
+                    date_field = "effective_date"
+                    if date_mode != "No date filter":
+                        date_field = "effective_date" if "effective" in date_mode else "termination_date"
+                        date_left,date_right=st.columns(2)
+                        with date_left:
+                            begin=st.date_input("Start date",value=pd.Timestamp("2026-01-01").date(),key="etl_start_v21")
+                        with date_right:
+                            finish=st.date_input("End date",value=pd.Timestamp("2026-10-28").date(),key="etl_end_v21")
+                        st.caption("Codes without verified dates are excluded by this filter; no quarterly release date is substituted.")
+                    destination = st.selectbox("Destination",[
                         "JSON Lines (S3 / Glue / Snowflake)",
                         "JSON array (API / cloud storage)",
                         "SQL Server (T-SQL)",
-                        "Oracle (SQL / PL-SQL)"
-                    ],key="etl_format_v17")
-                    if export_format.startswith("JSON Lines"):
-                        payload,filename,mime=jsonl(subset,verified),"hcpcs_changes.jsonl","application/x-ndjson"
-                    elif export_format.startswith("JSON array"):
-                        payload,filename,mime=json_array(subset,verified),"hcpcs_changes.json","application/json"
-                    elif export_format.startswith("SQL Server"):
-                        payload,filename,mime=sqlserver_script(subset,verified),"hcpcs_changes_sqlserver.sql","application/sql"
+                        "Oracle (SQL)"
+                    ],key="etl_format_v21")
+                    destination_code = ["jsonl","json","sqlserver","oracle"][[
+                        "JSON Lines (S3 / Glue / Snowflake)",
+                        "JSON array (API / cloud storage)",
+                        "SQL Server (T-SQL)","Oracle (SQL)"
+                    ].index(destination)]
+                    if not chosen_fields:
+                        st.warning("Select at least one output field.")
+                    elif begin is not None and finish is not None and begin > finish:
+                        st.warning("Start date must be on or before end date.")
                     else:
-                        payload,filename,mime=oracle_script(subset,verified),"hcpcs_changes_oracle.sql","application/sql"
-                    st.code(payload[:2800],language="json" if "JSON" in export_format else "sql")
-                    st.download_button("Download "+filename,payload.encode("utf-8"),
-                                       file_name=filename,mime=mime,key="etl_download_v17")
-                    st.caption(f"{len(subset):,} row(s) included. Script / JSON matches current filters.")
+                        try:
+                            output_rows=export_rows(subset,chosen_fields,verified,begin,finish,date_field)
+                            payload=render_export(output_rows,chosen_fields,destination_code)
+                            st.caption(f"{len(output_rows):,} exported row(s) · {len(chosen_fields)} selected column(s)")
+                            st.dataframe(pd.DataFrame(output_rows,columns=chosen_fields).head(15),
+                                         hide_index=True,use_container_width=True)
+                            st.code(payload[:3500],language="json" if destination_code.startswith("json") else "sql")
+                            filename="hcpcs_custom_export."+("jsonl" if destination_code=="jsonl" else "json" if destination_code=="json" else "sql")
+                            st.download_button("Download configured export",payload.encode("utf-8"),
+                                file_name=filename,mime="application/json" if destination_code.startswith("json") else "application/sql",
+                                key="etl_download_v21")
+                            if not output_rows:
+                                st.info("No records match the selected date range. Try removing the date filter or supplying verified dated records.")
+                        except ValueError as export_error:
+                            st.warning(str(export_error))
 
         except Exception as exc:
             st.error(f"Automatic CMS comparison unavailable: {exc}")
