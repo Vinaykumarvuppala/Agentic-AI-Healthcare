@@ -8,6 +8,14 @@ Try public CMS procedure-code lookup and semantic search directly in your browse
 
 A runnable Python project using **real, publicly available CMS Physician Fee Schedule data**, local semantic embeddings, and a **LangGraph** routing/retrieval workflow.
 
+## V5 CMS Research Assistant
+
+The app now includes a chat-style research interface (below the code-search tool) that routes questions with LangGraph between **procedure-code retrieval** and a public **CMS Evaluation and Management Services** guidance PDF. Policy PDF text is extracted page-by-page, chunked with overlap, embedded locally, and returned with page/source links and an execution trace. API-key-enabled LLM synthesis is optional; the default response is extractive, not a generated policy interpretation.
+
+Source policy: https://www.cms.gov/outreach-and-education/medicare-learning-network-mln/mlnproducts/downloads/eval-mgmt-serv-guide-icn006764.pdf
+
+**Scope:** This is a prototype with a single public policy PDF, not a fully autonomous multi-agent system. OpenAI API access is optional and is never needed for the source-backed retrieval mode. The PDF and model downloads on Streamlit Community Cloud may use substantial memory; if they fail, the original HCPCS lookup remains available.
+
 ## Dataset and provenance
 
 Official CMS 2026 PFS Indicators CSV (July 2026 release):
