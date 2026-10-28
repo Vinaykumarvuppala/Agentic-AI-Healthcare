@@ -54,6 +54,7 @@ with tab_search:
         st.session_state.pop("semantic_cache_query_v10", None)
         st.session_state.pop("semantic_results_v10", None)
         st.session_state["semantic_page_v10"] = 1
+        st.session_state.pop("semantic_category_v11", None)
     if q.strip():
         # Single search input: direct results render immediately; users can
         # request a deeper vector search without learning a second interface.
@@ -81,13 +82,23 @@ with tab_search:
                     st.session_state["semantic_cache_query_v10"] = q
                     st.session_state["semantic_page_v10"] = 1
                 found = st.session_state.get("semantic_results_v10", [])
-                st.markdown(f"**Related procedures ({len(found)} found)**")
-                if found:
+                def category_for(code):
+                    # HCPCS families are broad browsing labels, not clinical classifications.
+                    if code.startswith("D"): return "Dental (D)"
+                    if code.startswith(("99", "98")): return "E/M and related (98–99)"
+                    if code.startswith(("7", "8")) and code.isdigit(): return "Imaging / lab families (7–8)"
+                    if code[0].isalpha(): return "Other alphanumeric HCPCS"
+                    return "Other numeric CPT"
+                categories = ["All categories"] + sorted({category_for(row["hcpc"]) for row in found})
+                category = st.selectbox("Filter related results", categories, key="semantic_category_v11")
+                filtered = [row for row in found if category == "All categories" or category_for(row["hcpc"]) == category]
+                st.markdown(f"**Related procedures ({len(filtered)} of {len(found)} shown)**")
+                if filtered:
                     page_size = 6
-                    total_pages = (len(found) + page_size - 1) // page_size
+                    total_pages = (len(filtered) + page_size - 1) // page_size
                     current_page = min(st.session_state.get("semantic_page_v10", 1), total_pages)
-                    st.caption(f"Showing {((current_page-1)*page_size)+1}–{min(current_page*page_size,len(found))} of {len(found)} · page {current_page}/{total_pages}")
-                    for i, item in enumerate(found[(current_page-1)*page_size:current_page*page_size]):
+                    st.caption(f"Showing {((current_page-1)*page_size)+1}–{min(current_page*page_size,len(filtered))} of {len(filtered)} · page {current_page}/{total_pages}")
+                    for i, item in enumerate(filtered[(current_page-1)*page_size:current_page*page_size]):
                         code = item["hcpc"]
                         if st.button(f"{code}   ·   {item['description']}", key=f"related_{current_page}_{i}_{code}", use_container_width=True):
                             st.session_state["selected_code_v6"] = code
@@ -149,13 +160,28 @@ with tab_search:
     chosen = st.session_state.get("selected_code_v6")
     if chosen:
         st.divider()
-        st.subheader(f"HCPCS {chosen}")
-        records = df[df["hcpc"]==chosen]
-        if not records.empty:
-            st.write(records.iloc[0]["sdesc"])
-            cols = [c for c in ("hcpc","modifier","sdesc","proc_stat","nfac_total","fac_total","conv_fact") if c in records]
-            st.dataframe(records[cols],use_container_width=True,hide_index=True)
-            st.caption("Source record variants shown. These values are not a claim payment quote.")
+        with st.container(border=True):
+            top, close = st.columns([5, 1])
+            with top:
+                st.subheader(f"Procedure details · {chosen}")
+            with close:
+                if st.button("Clear", key="clear_details_v11"):
+                    st.session_state.pop("selected_code_v6", None)
+                    st.rerun()
+            records = df[df["hcpc"] == chosen]
+            if not records.empty:
+                st.markdown(f"**Description:** {records.iloc[0]['sdesc']}")
+                st.caption(f"{len(records)} source row(s) for code {chosen}; variants may differ in modifier or status.")
+                summary_fields = [("modifier", "Modifier"), ("proc_stat", "Procedure status")]
+                for column, label in summary_fields:
+                    if column in records.columns:
+                        values = sorted({str(x).strip() for x in records[column].dropna() if str(x).strip()})
+                        st.write(f"**{label}:** {', '.join(values) if values else 'Not specified'}")
+                with st.expander("View full CMS source fields", expanded=False):
+                    cols = [name for name in ("hcpc", "modifier", "sdesc", "proc_stat", "nfac_total", "fac_total", "conv_fact") if name in records.columns]
+                    st.dataframe(records[cols], use_container_width=True, hide_index=True)
+                st.markdown(f"[Official CMS PFS data source]({CMS_CSV_URL})")
+                st.caption("This is a code reference, not a payable amount or coding recommendation.")
 
 with tab_ask:
     st.subheader("Ask a question about CMS")
@@ -209,4 +235,4 @@ with tab_info:
     st.markdown(f"**Data source:** [CMS PFS indicators]({CMS_CSV_URL})")
     st.write("Autocomplete uses the actual public CMS descriptions and simple search aliases. 'Ask CMS' uses LangGraph routing and optional PDF chunk retrieval. The AI explanation is optional and needs an API key.")
     st.warning("Educational prototype: not medical advice, coding guidance, or a reimbursement determination. Verify current CMS rules and code effective dates.")
-st.caption("CMS Intelligence · V10 · Browse more relevant results")
+st.caption("CMS Intelligence · V11 · Filters and clear procedure details")
