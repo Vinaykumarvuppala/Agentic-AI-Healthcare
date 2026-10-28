@@ -1,202 +1,154 @@
-"""Streamlit interface to a public-data CMS semantic retrieval agent."""
+"""CMS Agent Lab: one search-first experience with optional research tools."""
+import os
 import pandas as pd
 import streamlit as st
-
+from autocomplete import suggest
 from cms_agent import CMS_CSV_URL, VectorSearch, build_agent, build_documents, load_cms_data
 from llm_rag import answer_with_llm
-from policy_rag import POLICIES, load_policy_chunks
+from policy_rag import load_policy_chunks
 from research_agent import make_research_agent
-from autocomplete import suggest
 
-st.set_page_config(page_title="CMS Agent Lab", page_icon="🩺", layout="wide")
-st.title("CMS Agent Lab")
-st.caption("Actual public CMS 2026 Physician Fee Schedule data · Vector embeddings · LangGraph · Python")
-st.info("Educational research tool only. Fee schedule indicators do not constitute a patient-specific reimbursement calculation.")
-
-@st.cache_data(ttl=86400, show_spinner="Downloading public CMS data…")
-def get_data() -> pd.DataFrame:
-    return load_cms_data()
-
-@st.cache_resource(show_spinner="Building vector embeddings (first run may take several minutes)…")
-def get_search_engine(index_version: str):
-    return VectorSearch(build_documents(get_data()))
-
-try:
-    df = get_data()
-except Exception as exc:
-    st.error(f"Could not fetch public CMS dataset: {exc}")
-    st.markdown(f"[Open official CSV source]({CMS_CSV_URL})")
-    st.stop()
-
-c1, c2, c3 = st.columns(3)
-c1.metric("CMS rows", f"{len(df):,}")
-c2.metric("Unique HCPCS codes", f"{df['hcpc'].nunique():,}")
-c3.metric("Data year", "2026")
-st.markdown(f"**Official source:** [CMS Physician Fee Schedule Indicators]({CMS_CSV_URL})")
+st.set_page_config(page_title="CMS Intelligence | Agent Lab", page_icon="🔎", layout="wide")
 
 st.markdown("""
 <style>
-.block-container {max-width: 1180px; padding-top: 1.8rem;}
-div[data-testid="stMetric"] {background: #f3f7fc; border: 1px solid #dce7f3; padding: 15px 18px; border-radius: 15px;}
-div[data-testid="stMetricLabel"] {font-weight: 600;}
-div[data-testid="stTextInput"] input {border-radius: 12px;}
-div[data-testid="stSelectbox"] > div {border-radius: 12px;}
-ul[role="listbox"] {max-height: 260px !important; overflow-y: auto !important;}
-</style>
-""", unsafe_allow_html=True)
+.block-container {max-width:1060px;padding-top:2rem;padding-bottom:4rem}
+h1 {letter-spacing:-.035em}
+div[data-testid="stMetric"] {background:var(--secondary-background-color);border:1px solid rgba(128,128,128,.16);border-radius:14px;padding:13px}
+div[data-testid="stButton"] button {border-radius:11px;text-align:left}
+div[data-testid="stTextInput"] input {border-radius:13px;font-size:1.05rem;padding:13px}
+div[data-testid="stExpander"] {border-radius:13px}
+</style>""", unsafe_allow_html=True)
 
-st.subheader("🔎 Smart Procedure Finder")
-st.caption("Search all CMS procedure descriptions or code fragments. Type **office**, **visit**, **22**, or **992**.")
-typed = st.text_input("Find a code or service", placeholder="Try: office visits, 22, 99213, x-ray…", key="smart_query")
-if typed.strip():
-    hits = suggest(df, typed, limit=80)
-    if hits:
-        st.caption(f"{len(hits)} matching suggestions shown · Top matches first · Scroll dropdown for more")
-        options = ["Select a suggestion…"] + [f"{x['code']}  |  {x['description']}" for x in hits]
-        selection = st.selectbox("Matching procedures (scroll for more)", options, key="smart_selection")
-        if selection != options[0]:
-            selected_code = selection.split("  |  ", 1)[0]
-            matching = df[df["hcpc"] == selected_code]
-            st.success(f"Selected {selected_code}")
-            cols = [a for a in ("hcpc","modifier","sdesc","proc_stat","nfac_total","fac_total","conv_fact") if a in matching.columns]
-            st.dataframe(matching[cols], hide_index=True, use_container_width=True)
-            st.caption("All code variants/modifiers shown; this is not a reimbursement quote.")
-    else:
-        st.warning("No matching CMS procedure records. Try another phrase or number.")
-st.divider()
+@st.cache_data(ttl=86400, show_spinner="Connecting to public CMS data…")
+def data():
+    return load_cms_data()
 
-mode = st.radio("Search mode", ["HCPCS code lookup", "Semantic meaning search"], horizontal=True)
-if mode == "HCPCS code lookup":
-    code = st.text_input("Enter a HCPCS/CPT code", value="99213").strip().upper()
-    rows = df[df["hcpc"] == code]
-    if rows.empty:
-        st.warning("No matching code in this release.")
-    else:
-        shown = [c for c in ["hcpc", "modifier", "sdesc", "proc_stat", "nfac_total", "fac_total", "conv_fact"] if c in rows.columns]
-        st.dataframe(rows[shown], use_container_width=True, hide_index=True)
-        st.caption("RVUs, indicator values, and conversion factors are not a final payable amount.")
-else:
-    st.caption("Search version: intent-aware-v4 · distinct HCPCS results")
-    question = st.text_input("Ask about services", value="Which procedures relate to office visits?")
-    use_llm = st.checkbox("Generate an LLM explanation with cited evidence (requires OPENAI_API_KEY)")
-    if st.button("Ask the retrieval agent", type="primary") and question.strip():
-        try:
-            search = get_search_engine("intent-aware-v4")
-            result = build_agent(search).invoke({"question": question})
-            # Defense in depth: dedupe the displayed evidence even when an
-            # older cached index or repeated source rows were encountered.
-            unique_results = []
-            seen_codes = set()
-            for item in result["results"]:
-                code = item["hcpc"]
-                if code not in seen_codes:
-                    unique_results.append(item)
-                    seen_codes.add(code)
-            result["results"] = unique_results
-            if len(unique_results) < 5:
-                st.caption("Showing distinct HCPCS codes only.")
-            st.markdown("### Relevant CMS codes")
-            for item in unique_results:
-                st.markdown(f"- **{item['hcpc']}** — {item['description']} (modifier: {item['modifier'] or 'none'}, status: {item['procedure_status'] or 'not specified'})")
+@st.cache_resource(show_spinner="Preparing semantic index…")
+def code_engine(version):
+    return VectorSearch(build_documents(data()))
 
-            if use_llm:
-                try:
-                    st.markdown(answer_with_llm(question, result["results"]))
-                except Exception as llm_exc:
-                    st.warning(f"LLM explanation unavailable: {llm_exc}")
-            st.subheader("Retrieved evidence")
-            for item in result["results"]:
-                st.write(f"**{item['hcpc']} — {item['description']}**")
-                st.caption(f"Similarity {item['score']:.3f} · Modifier {item['modifier'] or 'none'} · Year {item['year']}")
-        except Exception as exc:
-            st.error(f"Unable to run semantic retrieval: {exc}")
-
-with st.expander("Architecture and safeguards"):
-    st.markdown("""
-    1. Ingest real CMS public CSV, validate columns, and normalize records.
-    2. Convert descriptions to sentence-transformer embeddings.
-    3. Search by semantic similarity, or exact HCPCS code when present.
-    4. LangGraph runs routing → retrieval → grounded response.
-    5. Show sources and limitations. No patient data, private contracts, or fabricated payment amounts.
-
-    **Next milestones:** persisted vector index, document chunking for PDF policies,
-    optional LLM explanations with citations, read-only SQL tools, human review,
-    Docker/Kubernetes deployment, and evaluation datasets.
-    """)
-
-
-# V5: keep the original lookup working, add a distinct conversational research lab.
-st.divider()
-st.header("CMS Research Assistant · V5")
-st.caption("Experimental LangGraph tool routing · CMS PDF chunking · source-linked evidence")
-@st.cache_resource(show_spinner="Downloading CMS guidance and embedding policy chunks…")
-def get_policy_engine(version: str):
+@st.cache_resource(show_spinner="Reading and indexing CMS policy guidance…")
+def policy_engine(version):
     return VectorSearch(load_policy_chunks("CMS E/M Services Guide (Sep 2025)"))
 
-if "research_history" not in st.session_state:
-    st.session_state.research_history = []
+try:
+    df = data()
+except Exception as exc:
+    st.error(f"Unable to load CMS data: {exc}")
+    st.markdown(f"[Official CMS dataset]({CMS_CSV_URL})")
+    st.stop()
 
-source_choice = st.selectbox("Evidence source", ["Auto", "CMS procedure codes", "CMS policy PDF"],
-                             help="Auto routes billing/documentation questions to the CMS E/M policy PDF.")
-llm_research = st.checkbox("Summarize retrieved evidence using LLM (needs OPENAI_API_KEY)", key="v5_llm")
-for exchange in st.session_state.research_history:
-    with st.chat_message("user"):
-        st.write(exchange["question"])
-    with st.chat_message("assistant"):
-        st.markdown(exchange["answer"])
-        if exchange.get("llm"):
-            st.markdown("**AI explanation (experimental)**")
-            st.markdown(exchange["llm"])
-        with st.expander("Sources and agent execution"):
-            for cit in exchange["citations"]:
-                label = f"Source [{cit['number']}]"
-                if cit["page"]:
-                    label += f", PDF page {cit['page']}"
-                st.markdown(f"**{label}:** [View official CMS source]({cit['url']})")
-                st.caption(cit["excerpt"])
-            st.code("\n".join(exchange["trace"]), language="text")
+st.title("CMS Intelligence")
+st.write("**Find a medical service, explore HCPCS codes, or ask a question about CMS guidance.**")
+st.caption("Public CMS Physician Fee Schedule indicators · Educational research · 2026")
+tab_search, tab_ask, tab_info = st.tabs(["🔎 Find a service", "💬 Ask CMS", "ℹ️ About"])
 
-prompt = st.chat_input("Ask about E/M documentation, G2211, office visit codes, or CMS policies")
-if prompt:
-    with st.chat_message("user"):
-        st.write(prompt)
-    with st.chat_message("assistant"):
-        try:
-            with st.spinner("Retrieving public CMS evidence…"):
-                # Source-specific lazy loading so HCPCS lookup does not download the PDF model.
-                policy_needed = source_choice == "CMS policy PDF" or (
-                    source_choice == "Auto" and any(
-                        token in prompt.lower() for token in
-                        ("documentation", "guideline", "policy", "modifier", "medical decision", "g2211", "billing rule")
-                    )
-                )
-                # Both branches accept the same interface; unused source is never invoked.
-                code_index = get_search_engine("intent-aware-v4") if not policy_needed else None
-                policy_index = get_policy_engine("cms-em-2025-v1") if policy_needed else None
-                result = make_research_agent(code_index, policy_index).invoke(
-                    {"question": prompt, "source": source_choice}
-                )
-            st.markdown(result["answer"])
-            llm_text = ""
-            if llm_research and result.get("evidence"):
-                try:
-                    llm_text = answer_with_llm(prompt, result["evidence"])
-                    st.markdown("**AI explanation (experimental)**")
-                    st.markdown(llm_text)
-                except Exception as exc:
-                    st.warning(f"LLM explanation unavailable: {exc}")
-            with st.expander("Sources and agent execution", expanded=True):
-                for cit in result["citations"]:
-                    label = f"Source [{cit['number']}]"
-                    if cit["page"]:
-                        label += f", PDF page {cit['page']}"
-                    st.markdown(f"**{label}:** [View official CMS source]({cit['url']})")
+with tab_search:
+    st.subheader("What are you looking for?")
+    q = st.text_input("Search codes or services", placeholder="Try office, office visits, 22, 99213, emergency room…", key="search_v6")
+    if not q.strip():
+        st.caption("Start typing to see matching procedures. Search descriptions, partial codes, or common terms.")
+        st.markdown("**Popular searches**")
+        choices = ["office", "99213", "22", "preventive", "x-ray"]
+        cols = st.columns(len(choices))
+        for col, value in zip(cols,choices):
+            with col:
+                if st.button(value, key="chip_"+value, use_container_width=True):
+                    st.session_state["search_v6"] = value
+                    st.session_state.pop("selected_code_v6",None)
+                    st.rerun()
+    else:
+        hits = suggest(df, q, limit=80)
+        if hits:
+            st.caption(f"Best matches for **{q}** · showing {min(6,len(hits))} suggestions first")
+            for i,item in enumerate(hits[:6]):
+                if st.button(f"{item['code']}   ·   {item['description']}", key=f"hit_{i}_{item['code']}", use_container_width=True):
+                    st.session_state["selected_code_v6"] = item["code"]
+            if len(hits)>6:
+                with st.expander(f"Show more matching procedures ({len(hits)-6} additional)"):
+                    with st.container(height=265):
+                        for i,item in enumerate(hits[6:],start=6):
+                            if st.button(f"{item['code']}   ·   {item['description']}", key=f"hit_{i}_{item['code']}", use_container_width=True):
+                                st.session_state["selected_code_v6"] = item["code"]
+            if len(hits)==80:
+                st.caption("Showing the top 80; refine your search for more precise matches.")
+        else:
+            st.info("No exact description or code matches. Try a shorter term, or use Ask CMS for a meaning-based search.")
+
+    chosen = st.session_state.get("selected_code_v6")
+    if chosen:
+        st.divider()
+        st.subheader(f"HCPCS {chosen}")
+        records = df[df["hcpc"]==chosen]
+        if not records.empty:
+            st.write(records.iloc[0]["sdesc"])
+            cols = [c for c in ("hcpc","modifier","sdesc","proc_stat","nfac_total","fac_total","conv_fact") if c in records]
+            st.dataframe(records[cols],use_container_width=True,hide_index=True)
+            st.caption("Source record variants shown. These values are not a claim payment quote.")
+    with st.expander("Advanced: semantic similarity search"):
+        question = st.text_input("Search by meaning", placeholder="e.g., outpatient visit for established patient", key="semantic_v6")
+        if st.button("Find related procedures", key="run_semantic") and question.strip():
+            try:
+                result = build_agent(code_engine("intent-aware-v4")).invoke({"question":question})
+                seen=set()
+                for item in result.get("results",[]):
+                    if item["hcpc"] not in seen:
+                        seen.add(item["hcpc"])
+                        st.write(f"**{item['hcpc']}** — {item['description']}")
+            except Exception as exc:
+                st.error(f"Semantic search unavailable: {exc}")
+
+with tab_ask:
+    st.subheader("Ask a question about CMS")
+    st.caption("Retrieves public procedure records or CMS E/M policy passages. Answers include sources.")
+    source = st.selectbox("Research source",["Auto","CMS procedure codes","CMS policy PDF"],key="source_v6")
+    use_llm = st.toggle("AI-generated explanation (requires configured OpenAI API key)",value=False)
+    if "chat_v6" not in st.session_state:
+        st.session_state.chat_v6=[]
+    for x in st.session_state.chat_v6:
+        with st.chat_message("user"): st.write(x["question"])
+        with st.chat_message("assistant"):
+            st.markdown(x["answer"])
+            with st.expander("Source evidence and execution steps"):
+                for cit in x["citations"]:
+                    st.markdown(f"[CMS source {cit['number']}]({cit['url']})" + (f" · page {cit['page']}" if cit["page"] else ""))
                     st.caption(cit["excerpt"])
-                st.code("\n".join(result["trace"]), language="text")
-            st.session_state.research_history.append({
-                "question": prompt, "answer": result["answer"], "llm": llm_text,
-                "citations": result["citations"], "trace": result["trace"]
-            })
-        except Exception as exc:
-            st.error(f"Research assistant could not retrieve evidence: {exc}")
-st.caption("Public research only. Not medical, legal, billing or reimbursement advice; verify CMS effective dates.")
+                st.code("\n".join(x["trace"]),language="text")
+    prompt = st.chat_input("Ask about office visits, G2211 or E/M documentation…")
+    if prompt:
+        with st.chat_message("user"): st.write(prompt)
+        with st.chat_message("assistant"):
+            try:
+                words=("documentation","guideline","policy","modifier","medical decision","g2211","billing rule")
+                use_policy = source=="CMS policy PDF" or (source=="Auto" and any(w in prompt.lower() for w in words))
+                with st.spinner("Finding supporting CMS evidence…"):
+                    code_index = None if use_policy else code_engine("intent-aware-v4")
+                    pdf_index = policy_engine("v5") if use_policy else None
+                    result = make_research_agent(code_index,pdf_index).invoke({"question":prompt,"source":source})
+                answer=result["answer"]
+                if use_llm and result.get("evidence"):
+                    if os.getenv("OPENAI_API_KEY"):
+                        try: answer=answer_with_llm(prompt,result["evidence"])
+                        except Exception as exc: st.warning(f"AI explanation unavailable: {exc}")
+                    else:
+                        st.info("No API key configured. Showing sourced retrieval instead.")
+                st.markdown(answer)
+                with st.expander("Source evidence and execution steps"):
+                    for cit in result["citations"]:
+                        st.markdown(f"[CMS source {cit['number']}]({cit['url']})"+(f" · page {cit['page']}" if cit["page"] else ""))
+                        st.caption(cit["excerpt"])
+                    st.code("\n".join(result["trace"]),language="text")
+                st.session_state.chat_v6.append({"question":prompt,"answer":answer,"citations":result["citations"],"trace":result["trace"]})
+            except Exception as exc:
+                st.error(f"Research retrieval failed: {exc}")
+
+with tab_info:
+    a,b,c=st.columns(3)
+    a.metric("CMS rows",f"{len(df):,}")
+    b.metric("Unique codes",f"{df['hcpc'].nunique():,}")
+    c.metric("Release year","2026")
+    st.markdown(f"**Data source:** [CMS PFS indicators]({CMS_CSV_URL})")
+    st.write("Autocomplete uses the actual public CMS descriptions and simple search aliases. 'Ask CMS' uses LangGraph routing and optional PDF chunk retrieval. The AI explanation is optional and needs an API key.")
+    st.warning("Educational prototype: not medical advice, coding guidance, or a reimbursement determination. Verify current CMS rules and code effective dates.")
+st.caption("CMS Intelligence · V6 · Source-backed public-data research")
