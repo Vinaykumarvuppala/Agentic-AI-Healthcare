@@ -50,6 +50,7 @@ with tab_search:
     if st.session_state.get("last_query_v7") != q:
         st.session_state.pop("selected_code_v6", None)
         st.session_state["last_query_v7"] = q
+        st.session_state.pop("semantic_request_v8", None)
     if not q.strip():
         st.caption("Start typing to see matching procedures. Search descriptions, partial codes, or common terms.")
         st.markdown("**Popular searches**")
@@ -77,7 +78,30 @@ with tab_search:
             if len(hits)==80:
                 st.caption("Showing the top 80; refine your search for more precise matches.")
         else:
-            st.info("No matches found. Try a shorter phrase, a code fragment, or use Ask CMS for meaning-based research.")
+            st.info("No direct matches. Try the meaning-based search below.")
+
+        # Single search input: direct results render immediately; users can
+        # request a deeper vector search without learning a second interface.
+        if st.button("✨ Find related services by meaning", key="semantic_fallback_v8", use_container_width=True):
+            st.session_state["semantic_request_v8"] = q
+        if st.session_state.get("semantic_request_v8") == q:
+            try:
+                with st.spinner("Searching CMS codes by meaning…"):
+                    results = build_agent(code_engine("hybrid-v8")).invoke({"question": q}).get("results", [])
+                st.markdown("**AI-powered related procedures**")
+                seen = set()
+                for idx, item in enumerate(results):
+                    code = item["hcpc"]
+                    if code in seen:
+                        continue
+                    seen.add(code)
+                    if st.button(f"{code}   ·   {item['description']}", key=f"semantic_{idx}_{code}", use_container_width=True):
+                        st.session_state["selected_code_v6"] = code
+                if not seen:
+                    st.caption("No related procedures found.")
+                st.caption("Semantic results are approximate. Confirm codes against CMS documentation.")
+            except Exception as exc:
+                st.warning(f"Meaning-based search is unavailable: {exc}")
 
     chosen = st.session_state.get("selected_code_v6")
     if chosen:
@@ -89,18 +113,6 @@ with tab_search:
             cols = [c for c in ("hcpc","modifier","sdesc","proc_stat","nfac_total","fac_total","conv_fact") if c in records]
             st.dataframe(records[cols],use_container_width=True,hide_index=True)
             st.caption("Source record variants shown. These values are not a claim payment quote.")
-    with st.expander("Advanced: semantic similarity search"):
-        question = st.text_input("Search by meaning", placeholder="e.g., outpatient visit for established patient", key="semantic_v6")
-        if st.button("Find related procedures", key="run_semantic") and question.strip():
-            try:
-                result = build_agent(code_engine("intent-aware-v4")).invoke({"question":question})
-                seen=set()
-                for item in result.get("results",[]):
-                    if item["hcpc"] not in seen:
-                        seen.add(item["hcpc"])
-                        st.write(f"**{item['hcpc']}** — {item['description']}")
-            except Exception as exc:
-                st.error(f"Semantic search unavailable: {exc}")
 
 with tab_ask:
     st.subheader("Ask a question about CMS")
@@ -154,4 +166,4 @@ with tab_info:
     st.markdown(f"**Data source:** [CMS PFS indicators]({CMS_CSV_URL})")
     st.write("Autocomplete uses the actual public CMS descriptions and simple search aliases. 'Ask CMS' uses LangGraph routing and optional PDF chunk retrieval. The AI explanation is optional and needs an API key.")
     st.warning("Educational prototype: not medical advice, coding guidance, or a reimbursement determination. Verify current CMS rules and code effective dates.")
-st.caption("CMS Intelligence · V7 · Source-backed public-data research")
+st.caption("CMS Intelligence · V8 · Search and semantic discovery")
