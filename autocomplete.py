@@ -12,6 +12,16 @@ def suggest(df: pd.DataFrame, query: str, limit: int = 80) -> list[dict]:
     data["sdesc"] = data["sdesc"].astype(str).str.strip()
     code = data["hcpc"].str.lower()
     desc = data["sdesc"].str.lower()
+    aliases = {
+        "office visits": ["office", "o/p", "outpatient"],
+        "office visit": ["office", "o/p", "outpatient"],
+        "doctor visit": ["office", "o/p"],
+        "checkup": ["preventive", "prev visit"],
+        "physical": ["preventive", "prev visit"],
+        "emergency room": ["emergency", "er visit"],
+        "xray": ["x-ray", "radiography"],
+        "x-ray": ["x-ray", "radiography"],
+    }
     words = [w for w in re.split(r"\W+", q) if w]
     # Rank exact/prefix codes first, followed by description phrases and token matches.
     score = pd.Series(-1, index=data.index, dtype="int64")
@@ -19,6 +29,9 @@ def suggest(df: pd.DataFrame, query: str, limit: int = 80) -> list[dict]:
     score.loc[(code.str.startswith(q)) & (score < 90)] = 90
     score.loc[(desc.str.startswith(q)) & (score < 75)] = 75
     score.loc[(desc.str.contains(q, regex=False)) & (score < 65)] = 65
+    for alias in aliases.get(q, []):
+        match_alias = desc.str.contains(alias, regex=False)
+        score.loc[match_alias & (score < 58)] = 58
     if words:
         tokens_match = pd.Series(True, index=data.index)
         for word in words:
