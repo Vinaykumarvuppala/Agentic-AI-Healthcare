@@ -8,6 +8,12 @@ Try public CMS procedure-code lookup and semantic search directly in your browse
 
 A runnable Python project using **real, publicly available CMS Physician Fee Schedule data**, local semantic embeddings, and a **LangGraph** routing/retrieval workflow.
 
+## V6 — Search-first experience
+
+The landing page now has three clear tabs: **Find a service**, **Ask CMS**, and **About**. A single prominent search field provides live ranked suggestions across public CMS procedure descriptions and partial HCPCS code matches. Six suggestions appear immediately, with up to 74 additional matches in a scrollable section. Selecting a match opens source fields and modifier variants. Semantic retrieval remains available under an Advanced expander, not as a competing landing-page form.
+
+Common-language aliases help bridge phrases such as **doctor visit**, **office visits**, **checkup**, **physical**, and **emergency room** to shortened descriptions. This is keyword/alias autocomplete, not generative AI. The Ask CMS tab provides the separate LangGraph/document retrieval experience.
+
 ## Smart Procedure Finder
 
 Type any HCPCS code, partial code (such as `22` or `992`), or service phrase (such as `office`). The app ranks up to 80 suggestions, displays the first several in a scrollable dropdown, and lets you inspect all modifier variants of the selected code. Unlike the embedding search, this fast autocomplete is deterministic and requires no LLM API.
