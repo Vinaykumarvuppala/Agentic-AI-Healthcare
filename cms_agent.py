@@ -85,22 +85,33 @@ class VectorSearch:
                 return [dict(d, score=1.0) for d in matches[:k]]
         q = self.model.encode([query], normalize_embeddings=True)[0]
         scores = np.asarray(self.vectors) @ np.asarray(q)
-        # Prefer common medical E/M codes for generic office/outpatient visit queries.
-        # Do not exclude dental or other categories for explicitly dental questions.
-        medical_office_query = (
-            any(word in query.lower() for word in ("office visit", "office visits", "outpatient evaluation"))
-            and not any(word in query.lower() for word in ("dental", "dentist", "dentistry"))
-        )
-        candidates = np.argsort(-scores)[:max(200, k * 30)]
+        # Intent-aware ranking: office/outpatient E/M vs preventive medicine.
+        lower = query.lower()
+        preventive = any(t in lower for t in ("preventive", "annual physical", "wellness", "well-child"))
+        office = any(t in lower for t in ("office visit", "office visits", "outpatient evaluation", "established patient", "new patient"))
+        dental = any(t in lower for t in ("dental", "dentist", "dentistry"))
+        # Include code-family candidates even if dense semantic retrieval ranks
+        # their abbreviated CMS descriptions below the initial top 200.
+        top = set(int(i) for i in np.argsort(-scores)[:max(200, k * 30)])
+        if office and not preventive and not dental:
+            top.update(i for i, d in enumerate(self.documents) if d["hcpc"] in {
+                "99202", "99203", "99204", "99205", "99211", "99212",
+                "99213", "99214", "99215"
+            })
         ranked = []
-        for idx in candidates:
-            doc = self.documents[int(idx)]
-            score = float(scores[int(idx)])
+        for idx in top:
+            doc = self.documents[idx]
+            score = float(scores[idx])
             code = doc["hcpc"]
-            if medical_office_query and (code.startswith("992") or code.startswith("993")):
-                score += 0.16
-            if medical_office_query and code.startswith("D"):
-                score -= 0.16
+            if office and not preventive and not dental:
+                if code in {"99202", "99203", "99204", "99205", "99211", "99212", "99213", "99214", "99215"}:
+                    score += 0.32
+                elif code.startswith("993"):
+                    score -= 0.25
+                elif code.startswith("D"):
+                    score -= 0.20
+            elif preventive and code.startswith("993"):
+                score += 0.20
             ranked.append((score, doc))
         ranked.sort(key=lambda pair: pair[0], reverse=True)
         chosen = []
