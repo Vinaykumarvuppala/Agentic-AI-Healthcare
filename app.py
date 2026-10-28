@@ -7,6 +7,7 @@ from comparison import compare_codes, variants
 from comparison_explain import summarize_differences
 from investigation import build_report
 from lifecycle import normalize_lifecycle, classify, SOURCE as LIFECYCLE_SOURCE
+from investigation_graph import make_investigation_graph
 from cms_agent import CMS_CSV_URL, VectorSearch, build_agent, build_documents, load_cms_data
 from llm_rag import answer_with_llm
 from policy_rag import load_policy_chunks
@@ -329,22 +330,13 @@ with tab_investigate:
         else:
             try:
                 with st.spinner("Retrieving official CMS evidence…"):
-                    relevant_rows = df.loc[df["hcpc"] == selected].fillna("").to_dict("records")
-                    # Policy retrieval is deliberately optional: the indexed E/M
-                    # guide may not cover other specialties or HCPCS families.
-                    supporting = []
-                    trace = ["CMS indicator lookup: " + selected]
-                    if selected.startswith(("992", "993")):
-                        try:
-                            supporting = policy_engine("v14-policy").search(
-                                inquiry + " office outpatient evaluation management " + selected, k=4
-                            )
-                            trace.append(f"CMS E/M guide retrieval: {len(supporting)} passages")
-                        except Exception as policy_error:
-                            trace.append(f"CMS E/M guide unavailable: {type(policy_error).__name__}")
-                    else:
-                        trace.append("E/M PDF search skipped: code outside selected E/M families")
-                    report = build_report(selected, inquiry, relevant_rows, supporting, trace)
+                    def lookup(code):
+                        return df.loc[df["hcpc"] == code].fillna("").to_dict("records")
+                    def lookup_policy(query):
+                        return policy_engine("v15-policy").search(query, k=4)
+                    graph = make_investigation_graph(lookup, lookup_policy)
+                    outcome = graph.invoke({"code":selected, "question":inquiry})
+                    report = outcome["report"]
                     st.session_state["investigation_report_v14"] = report
                     st.session_state["investigation_selection_v14"] = (selected, inquiry)
             except Exception as exc:
