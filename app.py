@@ -10,8 +10,6 @@ from lifecycle import normalize_lifecycle, classify, SOURCE as LIFECYCLE_SOURCE
 from investigation_graph import make_investigation_graph
 from cms_quarterly import load_quarterly_changes, CMS_PAGE
 from etl_exports import jsonl, json_array, sqlserver_script, oracle_script
-from cms_transactions import fetch_dated_release, inspect_official_release
-from cms_source_diagnostics import inspect_archive
 from cms_agent import CMS_CSV_URL, VectorSearch, build_agent, build_documents, load_cms_data
 from llm_rag import answer_with_llm
 from policy_rag import load_policy_chunks
@@ -301,6 +299,7 @@ with tab_lifecycle:
                         try:
                             @st.cache_data(ttl=86400,show_spinner="Reading official CMS transaction workbook…")
                             def dated_codes_for_release(release):
+                                from cms_transactions import fetch_dated_release
                                 return fetch_dated_release(release)
                             verified=dated_codes_for_release(newer)
                             st.success(f"{len(verified):,} unambiguous dated code records available from {newer}.")
@@ -312,6 +311,7 @@ with tab_lifecycle:
                         if st.button("Inspect official "+newer+" archive",key="inspect_official_v20"):
                             try:
                                 with st.spinner("Reading official CMS archive layout…"):
+                                    from cms_transactions import inspect_official_release
                                     layout, official_url=inspect_official_release(newer)
                                 if layout:
                                     st.dataframe(pd.DataFrame(layout),hide_index=True,use_container_width=True)
@@ -328,6 +328,7 @@ with tab_lifecycle:
                         zip_upload=st.file_uploader("Upload official quarterly CMS ZIP for schema inspection",type=["zip"],key="diag_zip_v19")
                         if zip_upload is not None:
                             try:
+                                from cms_source_diagnostics import inspect_archive
                                 details=inspect_archive(zip_upload.getvalue())
                                 if details:
                                     st.dataframe(pd.DataFrame(details),hide_index=True,use_container_width=True)
