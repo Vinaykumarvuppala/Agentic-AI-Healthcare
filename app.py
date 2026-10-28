@@ -355,6 +355,9 @@ with tab_lifecycle:
                                 st.success(f"{len(verified):,} valid dated Level II record(s) available for matching.")
                         except Exception as date_error:
                             st.warning(f"Dated data not usable: {date_error}")
+                    st.markdown("### Build your ETL export")
+                    st.caption("1. Select fields · 2. Set optional verified-date window · 3. Choose SQL/JSON · 4. Preview and download")
+                    st.info("This export uses the currently filtered quarterly changes. Original code effective/termination dates are only present where dated source records were loaded.")
                     st.markdown("#### Configure export columns and dates")
                     field_labels = {
                         "hcpcs_code":"HCPCS code","change_type":"Change type",
@@ -367,7 +370,7 @@ with tab_lifecycle:
                     chosen_fields = st.multiselect(
                         "Choose fields to export (only these columns will appear)",
                         options=list(COLS),
-                        default=["hcpcs_code","change_type","new_record","effective_date","termination_date"],
+                        default=["hcpcs_code","change_type","effective_date","termination_date"],
                         format_func=lambda k: field_labels[k],
                         key="etl_fields_v21"
                     )
@@ -384,7 +387,7 @@ with tab_lifecycle:
                             begin=st.date_input("Start date",value=pd.Timestamp("2026-01-01").date(),key="etl_start_v21")
                         with date_right:
                             finish=st.date_input("End date",value=pd.Timestamp("2026-10-28").date(),key="etl_end_v21")
-                        st.caption("Codes without verified dates are excluded by this filter; no quarterly release date is substituted.")
+                        st.caption("Inclusive start/end dates. Missing verified dates are excluded; quarterly release dates are not substituted.")
                     destination = st.selectbox("Destination",[
                         "JSON Lines (S3 / Glue / Snowflake)",
                         "JSON array (API / cloud storage)",
@@ -405,6 +408,7 @@ with tab_lifecycle:
                             output_rows=export_rows(subset,chosen_fields,verified,begin,finish,date_field)
                             payload=render_export(output_rows,chosen_fields,destination_code)
                             st.caption(f"{len(output_rows):,} exported row(s) · {len(chosen_fields)} selected column(s)")
+                            st.caption("Export schema: " + ", ".join(chosen_fields))
                             st.dataframe(pd.DataFrame(output_rows,columns=chosen_fields).head(15),
                                          hide_index=True,use_container_width=True)
                             st.code(payload[:3500],language="json" if destination_code.startswith("json") else "sql")
