@@ -8,6 +8,12 @@ Try public CMS procedure-code lookup and semantic search directly in your browse
 
 A runnable Python project using **real, publicly available CMS Physician Fee Schedule data**, local semantic embeddings, and a **LangGraph** routing/retrieval workflow.
 
+## V18 — Automatic CMS transaction date extraction (experimental)
+
+Under **Code lifecycle → Data Export / ETL**, choose **Load dated transaction records** for the selected newer quarterly release. The app attempts to read an official CMS ZIP-contained transaction Excel workbook, locate explicit HCPCS, effective-date and termination-date columns, validate five-character Level II codes and dates, discard conflicting records, and join matching dates to SQL Server/Oracle/JSON exports. It never substitutes the quarterly release date for an individual code date. If the actual CMS transaction workbook has different headers or no explicit date fields, it **fails closed** and shows a warning. Manual date-file mapping remains available.
+
+**Validation status:** Parsing is covered by synthetic-fixture tests, but a full live CMS October 2026 transaction workbook ingestion has **not** been verified. Production workflows should validate the source workbook and schema before using these dates.
+
 ## V17 — SQL Server, Oracle, cloud JSON exports
 
 The Code lifecycle tab has a **Data Export / ETL** expander after automatically comparing two CMS quarterly releases. It exports the **currently filtered** changes as JSON array, JSONL for S3/Glue/cloud ingestion, SQL Server T-SQL with create-if-missing and duplicate-safe inserts, or Oracle SQL with create-table and MERGE statements. Core columns: `hcpcs_code`, `change_type`, `old_record`, `new_record`, `older_release`, `newer_release`, `effective_date`, `termination_date`, `date_source`. **Dates remain NULL for a snapshot difference**: they must not be substituted with quarterly release dates. The ETL export panel can optionally map and join a separate dated HCPCS Level II CSV/Excel extract; only unique, explicitly dated records supply effective/termination dates. Review the source provenance before using these fields. Oracle initial table DDL should run only once; reruns can execute MERGEs alone. This is a prototype bulk export, not an optimized high-volume load. Do not run unreviewed SQL in production.
