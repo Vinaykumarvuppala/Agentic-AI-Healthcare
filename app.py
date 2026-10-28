@@ -6,6 +6,7 @@ from autocomplete import suggest
 from comparison import compare_codes, variants
 from comparison_explain import summarize_differences
 from investigation import build_report
+from lifecycle import normalize_lifecycle, classify, SOURCE as LIFECYCLE_SOURCE
 from cms_agent import CMS_CSV_URL, VectorSearch, build_agent, build_documents, load_cms_data
 from llm_rag import answer_with_llm
 from policy_rag import load_policy_chunks
@@ -45,7 +46,7 @@ except Exception as exc:
 st.title("CMS Intelligence")
 st.write("**Find a medical service, explore HCPCS codes, or ask a question about CMS guidance.**")
 st.caption("Public CMS Physician Fee Schedule indicators · Educational research · 2026")
-tab_search, tab_compare, tab_investigate, tab_ask, tab_info = st.tabs(["🔎 Find a service", "⚖️ Compare codes", "🧭 Investigate", "💬 Ask CMS", "ℹ️ About"])
+tab_search, tab_compare, tab_lifecycle, tab_investigate, tab_ask, tab_info = st.tabs(["🔎 Find a service", "⚖️ Compare codes", "📅 Code lifecycle", "🧭 Investigate", "💬 Ask CMS", "ℹ️ About"])
 
 with tab_search:
     st.subheader("What are you looking for?")
@@ -245,6 +246,73 @@ with tab_compare:
 
 
 
+
+with tab_lifecycle:
+    st.subheader("HCPCS Level II code lifecycle")
+    st.caption("New codes · effective dates · terminated codes · date-of-service checks")
+    st.info("The PFS indicator file used elsewhere in this app does not prove an individual code's effective date. Load the official CMS Level II quarterly change data below to verify lifecycle dates.")
+    st.markdown(f"[Official CMS quarterly releases]({LIFECYCLE_SOURCE}) · October 2026, July 2026, April 2026 and earlier.")
+    with st.expander("How to prepare the CMS source data", expanded=False):
+        st.write("Download the official CMS HCPCS Level II quarterly ZIP and locate its dated code/transaction records. Upload a CSV or Excel sheet with code, effective/add date, and termination date fields, or a normalized extract from those records. Map the columns below. The original raw fixed-width text is not yet parsed automatically.")
+        st.caption("Level II only: letter-prefixed HCPCS codes. Numeric CPT/HCPCS Level I code dates require a separate licensed source.")
+    upload = st.file_uploader("Upload dated HCPCS Level II CSV or Excel", type=["csv","xlsx"], key="hcpcs_lifecycle_upload_v15")
+    if upload is not None:
+        try:
+            if upload.name.lower().endswith(".csv"):
+                raw = pd.read_csv(upload, dtype=str)
+            else:
+                raw = pd.read_excel(upload, dtype=str)
+            if raw.empty:
+                st.warning("This sheet contains no records.")
+            else:
+                col_names = list(raw.columns)
+                def default_col(*candidates):
+                    norm = lambda x:"".join(ch for ch in str(x).lower() if ch.isalnum())
+                    for wanted in candidates:
+                        for i,col in enumerate(col_names):
+                            if norm(col)==norm(wanted):
+                                return i
+                    return 0
+                with st.expander("Map official source columns",expanded=True):
+                    a,b,c,d = st.columns(4)
+                    with a:
+                        code_col = st.selectbox("HCPCS code",col_names,index=default_col("HCPCS","HCPCS Code","code"),key="map_code_v15")
+                    with b:
+                        effective_col = st.selectbox("Effective/add date",col_names,index=default_col("Add Date","Effective Date","effective_date"),key="map_eff_v15")
+                    with c:
+                        terminate_col = st.selectbox("Termination date",col_names,index=default_col("Termination Date","termination_date","end date"),key="map_end_v15")
+                    with d:
+                        descriptions = ["(none)"]+col_names
+                        description_col = st.selectbox("Description (optional)",descriptions,key="map_desc_v15")
+                mapping = {"code":code_col,"effective_date":effective_col,"termination_date":terminate_col}
+                if description_col!="(none)": mapping["description"]=description_col
+                parsed = normalize_lifecycle(raw,mapping)
+                st.caption(f"{len(parsed):,} dated records loaded. Unknown dates remain unknown; no dates are inferred.")
+                a,b=st.columns(2)
+                with a: as_of=st.date_input("Check validity on date",value=pd.Timestamp("2026-10-28").date(),key="life_asof_v15")
+                with b: since=st.date_input("Show changes since",value=pd.Timestamp("2026-07-01").date(),key="life_since_v15")
+                result=classify(parsed,as_of,since)
+                states=["All","Active","New in period","Expired","Expired in period","Future","Unknown date"]
+                filter_status=st.selectbox("Show codes",states,key="life_filter_v15")
+                if filter_status=="New in period" or filter_status=="Expired in period":
+                    result=result.loc[result["change"]==filter_status]
+                elif filter_status!="All":
+                    result=result.loc[result["status"]==filter_status]
+                query_life=st.text_input("Filter by code or description",key="life_query_v15")
+                if query_life.strip():
+                    mask=result["code"].str.contains(query_life.strip().upper(),regex=False) | result["description"].str.contains(query_life.strip(),case=False,regex=False)
+                    result=result.loc[mask]
+                display=result.copy()
+                for field in ["effective_date","termination_date"]:
+                    display[field]=display[field].dt.strftime("%Y-%m-%d").fillna("Unknown")
+                st.metric("Matching codes",f"{len(display):,}")
+                st.dataframe(display,hide_index=True,use_container_width=True)
+                st.download_button("Download lifecycle results CSV",display.to_csv(index=False).encode("utf-8"),
+                                   file_name="hcpcs_lifecycle_results.csv",mime="text/csv",key="life_export_v15")
+                st.caption("Termination date is treated as the last valid service date. Unknown or incomplete records are not marked active.")
+        except Exception as exc:
+            st.error(f"Could not interpret lifecycle file: {exc}")
+
 with tab_investigate:
     st.subheader("Guided CMS investigation")
     st.caption("Three steps: choose a code, ask a question, and review a source-linked analyst report.")
@@ -342,4 +410,4 @@ with tab_info:
     st.markdown(f"**Data source:** [CMS PFS indicators]({CMS_CSV_URL})")
     st.write("Autocomplete uses the actual public CMS descriptions and simple search aliases. 'Ask CMS' uses LangGraph routing and optional PDF chunk retrieval. The AI explanation is optional and needs an API key.")
     st.warning("Educational prototype: not medical advice, coding guidance, or a reimbursement determination. Verify current CMS rules and code effective dates.")
-st.caption("CMS Intelligence · V14 · Guided investigation")
+st.caption("CMS Intelligence · V15 · Code lifecycle and investigations")
