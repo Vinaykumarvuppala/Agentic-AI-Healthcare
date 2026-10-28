@@ -42,12 +42,12 @@ if mode == "HCPCS code lookup":
         st.dataframe(rows[shown], use_container_width=True, hide_index=True)
         st.caption("RVUs, indicator values, and conversion factors are not a final payable amount.")
 else:
-    st.caption("Search version: dedup-medical-v3 · distinct HCPCS results")
+    st.caption("Search version: intent-aware-v4 · distinct HCPCS results")
     question = st.text_input("Ask about services", value="Which procedures relate to office visits?")
     use_llm = st.checkbox("Generate an LLM explanation with cited evidence (requires OPENAI_API_KEY)")
     if st.button("Ask the retrieval agent", type="primary") and question.strip():
         try:
-            search = get_search_engine("dedup-medical-v3")
+            search = get_search_engine("intent-aware-v4")
             result = build_agent(search).invoke({"question": question})
             # Defense in depth: dedupe the displayed evidence even when an
             # older cached index or repeated source rows were encountered.
