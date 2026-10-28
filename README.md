@@ -8,6 +8,10 @@ Try public CMS procedure-code lookup and semantic search directly in your browse
 
 A runnable Python project using **real, publicly available CMS Physician Fee Schedule data**, local semantic embeddings, and a **LangGraph** routing/retrieval workflow.
 
+## V17 — SQL Server, Oracle, cloud JSON exports
+
+The Code lifecycle tab has a **Data Export / ETL** expander after automatically comparing two CMS quarterly releases. It exports the **currently filtered** changes as JSON array, JSONL for S3/Glue/cloud ingestion, SQL Server T-SQL with create-if-missing and duplicate-safe inserts, or Oracle SQL with create-table and MERGE statements. Core columns: `hcpcs_code`, `change_type`, `old_record`, `new_record`, `older_release`, `newer_release`, `effective_date`, `termination_date`, `date_source`. **Dates remain NULL for a snapshot difference**: they must not be substituted with quarterly release dates. Oracle initial table DDL should run only once; reruns can execute MERGEs alone. This is a prototype bulk export, not an optimized high-volume load. Do not run unreviewed SQL in production.
+
 ## V16 — Automatic official CMS quarterly comparison
 
 The Code lifecycle tab now includes **Load official CMS changes**, which discovers ZIP links on the CMS quarterly update page, downloads the selected full snapshots, parses the ANWEB primary code file and compares the code sets/text. The results show **Appeared in newer release**, **Absent from newer release**, and **Record text changed**, with source links and downloadable CSV. These are snapshot comparisons, **not exact code-level addition/termination dates**. For authoritative dates use the separate upload-and-map transaction record workflow; numeric AMA CPT is outside this Level II scope. CMS may change its file layout; the parser fails visibly rather than inventing results. Network/download reliability on Streamlit Community Cloud has not been verified.
