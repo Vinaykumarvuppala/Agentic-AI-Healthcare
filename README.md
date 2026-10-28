@@ -1,5 +1,11 @@
 # CMS Agent Lab — public-data Agentic AI prototype
 
+## 🚀 Live Demo
+
+**[Launch CMS Agent Lab on Streamlit](https://agentic-ai-healthcare-edve5pakacrde7pvxy776r.streamlit.app)**
+
+Try public CMS procedure-code lookup and semantic search directly in your browser. The optional LLM explanation requires a configured API key on the deployed app.
+
 A runnable Python project using **real, publicly available CMS Physician Fee Schedule data**, local semantic embeddings, and a **LangGraph** routing/retrieval workflow.
 
 ## Dataset and provenance
