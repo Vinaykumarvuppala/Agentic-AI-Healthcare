@@ -5,6 +5,7 @@ import streamlit as st
 from autocomplete import suggest
 from comparison import compare_codes, variants
 from comparison_explain import summarize_differences
+from investigation import build_report
 from cms_agent import CMS_CSV_URL, VectorSearch, build_agent, build_documents, load_cms_data
 from llm_rag import answer_with_llm
 from policy_rag import load_policy_chunks
@@ -44,7 +45,7 @@ except Exception as exc:
 st.title("CMS Intelligence")
 st.write("**Find a medical service, explore HCPCS codes, or ask a question about CMS guidance.**")
 st.caption("Public CMS Physician Fee Schedule indicators · Educational research · 2026")
-tab_search, tab_compare, tab_ask, tab_info = st.tabs(["🔎 Find a service", "⚖️ Compare codes", "💬 Ask CMS", "ℹ️ About"])
+tab_search, tab_compare, tab_investigate, tab_ask, tab_info = st.tabs(["🔎 Find a service", "⚖️ Compare codes", "🧭 Investigate", "💬 Ask CMS", "ℹ️ About"])
 
 with tab_search:
     st.subheader("What are you looking for?")
@@ -243,6 +244,52 @@ with tab_compare:
     st.markdown(f"[CMS source data]({CMS_CSV_URL})")
 
 
+
+with tab_investigate:
+    st.subheader("Guided CMS investigation")
+    st.caption("Three steps: choose a code, ask a question, and review a source-linked analyst report.")
+    available_codes = sorted(df["hcpc"].dropna().astype(str).str.upper().unique().tolist())
+    selected = st.selectbox("1 · Choose a procedure", available_codes,
+                            index=available_codes.index("99213") if "99213" in available_codes else 0,
+                            key="investigate_code_v14")
+    inquiry = st.text_area("2 · What do you want to investigate?",
+                           value="What does CMS publish about this procedure and its office/outpatient E/M context?",
+                           key="investigate_question_v14", height=90)
+    if st.button("3 · Generate investigation report", key="run_investigation_v14", type="primary"):
+        if not inquiry.strip():
+            st.warning("Enter a research question first.")
+        else:
+            try:
+                with st.spinner("Retrieving official CMS evidence…"):
+                    relevant_rows = df.loc[df["hcpc"] == selected].fillna("").to_dict("records")
+                    # Policy retrieval is deliberately optional: the indexed E/M
+                    # guide may not cover other specialties or HCPCS families.
+                    supporting = []
+                    trace = ["CMS indicator lookup: " + selected]
+                    if selected.startswith(("992", "993")):
+                        try:
+                            supporting = policy_engine("v14-policy").search(
+                                inquiry + " office outpatient evaluation management " + selected, k=4
+                            )
+                            trace.append(f"CMS E/M guide retrieval: {len(supporting)} passages")
+                        except Exception as policy_error:
+                            trace.append(f"CMS E/M guide unavailable: {type(policy_error).__name__}")
+                    else:
+                        trace.append("E/M PDF search skipped: code outside selected E/M families")
+                    report = build_report(selected, inquiry, relevant_rows, supporting, trace)
+                    st.session_state["investigation_report_v14"] = report
+                    st.session_state["investigation_selection_v14"] = (selected, inquiry)
+            except Exception as exc:
+                st.error(f"Investigation could not complete: {exc}")
+    if st.session_state.get("investigation_selection_v14") == (selected, inquiry):
+        report = st.session_state.get("investigation_report_v14")
+        if report:
+            st.markdown(report)
+            st.download_button("Download analyst report (.md)", report.encode("utf-8"),
+                               file_name=f"cms_investigation_{selected}.md",
+                               mime="text/markdown",key="download_investigation_v14")
+    st.caption("Research findings require human verification. No patient data or private payer contracts are used.")
+
 with tab_ask:
     st.subheader("Ask a question about CMS")
     st.caption("Retrieves public procedure records or CMS E/M policy passages. Answers include sources.")
@@ -295,4 +342,4 @@ with tab_info:
     st.markdown(f"**Data source:** [CMS PFS indicators]({CMS_CSV_URL})")
     st.write("Autocomplete uses the actual public CMS descriptions and simple search aliases. 'Ask CMS' uses LangGraph routing and optional PDF chunk retrieval. The AI explanation is optional and needs an API key.")
     st.warning("Educational prototype: not medical advice, coding guidance, or a reimbursement determination. Verify current CMS rules and code effective dates.")
-st.caption("CMS Intelligence · V13 · Evidence-backed comparison")
+st.caption("CMS Intelligence · V14 · Guided investigation")
