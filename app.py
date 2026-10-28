@@ -12,6 +12,7 @@ from cms_quarterly import load_quarterly_changes, CMS_PAGE
 from etl_exports import jsonl, json_array, sqlserver_script, oracle_script, COLS
 from custom_etl import export_rows, render_export
 from project_roadmap import ROADMAP, counts, STATUSES
+from retrieval_eval import CASES, evaluate
 from cms_agent import CMS_CSV_URL, VectorSearch, build_agent, build_documents, load_cms_data
 from llm_rag import answer_with_llm
 from policy_rag import load_policy_chunks
@@ -592,6 +593,29 @@ with tab_roadmap:
             if item["evidence"]:
                 st.caption("Code: "+item["evidence"])
             st.write("**Next:** "+item["next"])
+    with st.expander("Phase 3 lab — retrieval evaluation",expanded=False):
+        st.caption("Run a small reproducible benchmark against four curated questions. These starter expectations require further expert review.")
+        if st.button("Evaluate current semantic retrieval",key="eval_run_p3"):
+            try:
+                with st.spinner("Computing retrieval metrics…"):
+                    engine=code_engine("phase3-eval-v1")
+                    output=evaluate(CASES,lambda text,k:[x["hcpc"] for x in engine.search(text,k=k)],k=5)
+                st.metric("Mean recall@5",f"{output['mean_recall_at_k']:.1%}")
+                st.metric("Mean reciprocal rank",f"{output['mean_reciprocal_rank']:.3f}")
+                st.dataframe(pd.DataFrame(output["cases"]),hide_index=True,use_container_width=True)
+            except Exception as exc:
+                st.warning(f"Evaluation unavailable: {exc}")
+    with st.expander("Phase 3 lab — persistent Chroma index",expanded=False):
+        st.caption("Build a bounded 2,500-document Chroma sample on the local Streamlit server. Community Cloud storage can be ephemeral; production persistence requires durable external storage.")
+        if st.button("Build / open Chroma sample",key="chroma_build_p3"):
+            try:
+                from vector_lab import build_or_open,query as vector_query
+                with st.spinner("Building persistent local index…"):
+                    store,model,stats=build_or_open(build_documents(data()))
+                st.session_state["chroma_stats_p3"]=stats
+                st.success(f"Indexed {stats['indexed']:,} chunks; added {stats['added']:,}.")
+            except Exception as exc:
+                st.warning(f"Chroma lab unavailable: {exc}")
     st.markdown("#### Recommended next milestone")
     st.write("Build a **persistent vector database and evaluation dataset**, then introduce LangChain tools, LangGraph checkpoints, and human approvals. Benchmark multiple LLMs before AWS and Kubernetes production deployment.")
     st.markdown("[Project source and roadmap](https://github.com/Vinaykumarvuppala/Agentic-AI-Healthcare)")
