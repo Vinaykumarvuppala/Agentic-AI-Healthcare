@@ -22,6 +22,10 @@ Under **Code lifecycle → Data Export / ETL**, choose **Load dated transaction 
 
 **Validation status:** Parsing is covered by synthetic-fixture tests, but a full live CMS October 2026 transaction workbook ingestion has **not** been verified. Production workflows should validate the source workbook and schema before using these dates.
 
+## Project roadmap dashboard
+
+The **Project roadmap** tab tracks implemented code, prototypes awaiting validation, planned capabilities, next engineering tasks and four development phases. It covers Python, ingestion, chunking, embeddings, vector databases, semantic search, RAG, LangChain, LangGraph, LLM comparison, SageMaker AI, Bedrock, Kubernetes, security and evaluation. Statuses are defined in `project_roadmap.py` and updated through code review; merely adding a file is not a production-readiness claim.
+
 ## V21 — Configure ETL output fields and date window
 
 In **Code lifecycle → Load official CMS changes → Data Export / ETL**, select only the output columns you need. Choose **No date filter**, **Verified effective date**, or **Verified termination date**, and enter an inclusive start/end date. Export to SQL Server, Oracle, JSON or JSONL. DDL and INSERT statements contain only chosen columns; JSON keys follow the same selection. A date filter excludes records without explicit verified dates. No quarterly publication date is substituted. Custom SQL exports are insert-only and can duplicate data if rerun; review before executing in production.
