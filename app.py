@@ -10,7 +10,7 @@ from lifecycle import normalize_lifecycle, classify, SOURCE as LIFECYCLE_SOURCE
 from investigation_graph import make_investigation_graph
 from cms_quarterly import load_quarterly_changes, CMS_PAGE
 from etl_exports import jsonl, json_array, sqlserver_script, oracle_script
-from cms_transactions import fetch_dated_release
+from cms_transactions import fetch_dated_release, inspect_official_release
 from cms_source_diagnostics import inspect_archive
 from cms_agent import CMS_CSV_URL, VectorSearch, build_agent, build_documents, load_cms_data
 from llm_rag import answer_with_llm
@@ -307,6 +307,22 @@ with tab_lifecycle:
                             st.caption("Dates come from explicit CMS transaction fields, not release dates. Conflicting records are excluded.")
                         except Exception as date_exc:
                             st.warning(f"Automatic date extraction unavailable: {date_exc}. You can still upload mapped dated records.")
+                    with st.expander("Inspect official CMS transaction file automatically"):
+                        st.caption("Download the selected quarterly CMS ZIP and inspect workbook filenames, worksheets and detected headers without uploading anything.")
+                        if st.button("Inspect official "+newer+" archive",key="inspect_official_v20"):
+                            try:
+                                with st.spinner("Reading official CMS archive layout…"):
+                                    layout, official_url=inspect_official_release(newer)
+                                if layout:
+                                    st.dataframe(pd.DataFrame(layout),hide_index=True,use_container_width=True)
+                                    st.download_button("Download official schema report",
+                                        pd.DataFrame(layout).to_json(orient="records",indent=2).encode("utf-8"),
+                                        "cms_official_schema.json","application/json",key="official_schema_download_v20")
+                                else:
+                                    st.warning("No Excel transaction workbooks detected in the archive.")
+                                st.markdown(f"[CMS ZIP source]({official_url})")
+                            except Exception as diag_exc:
+                                st.warning(f"Could not inspect official file: {diag_exc}")
                     with st.expander("Inspect CMS ZIP workbook layout (diagnostics)"):
                         st.caption("Use this when automatic date extraction fails. The report lists real sheet names and candidate headers without guessing field positions.")
                         zip_upload=st.file_uploader("Upload official quarterly CMS ZIP for schema inspection",type=["zip"],key="diag_zip_v19")
@@ -507,4 +523,4 @@ with tab_info:
     st.markdown(f"**Data source:** [CMS PFS indicators]({CMS_CSV_URL})")
     st.write("Autocomplete uses the actual public CMS descriptions and simple search aliases. 'Ask CMS' uses LangGraph routing and optional PDF chunk retrieval. The AI explanation is optional and needs an API key.")
     st.warning("Educational prototype: not medical advice, coding guidance, or a reimbursement determination. Verify current CMS rules and code effective dates.")
-st.caption("CMS Intelligence · V17 · ETL exports")
+st.caption("CMS Intelligence · V20 · Verified source schema inspection")
