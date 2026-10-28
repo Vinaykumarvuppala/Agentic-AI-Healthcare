@@ -4,6 +4,7 @@ import pandas as pd
 import streamlit as st
 from autocomplete import suggest
 from comparison import compare_codes, variants
+from comparison_explain import summarize_differences
 from cms_agent import CMS_CSV_URL, VectorSearch, build_agent, build_documents, load_cms_data
 from llm_rag import answer_with_llm
 from policy_rag import load_policy_chunks
@@ -215,6 +216,28 @@ with tab_compare:
                 st.download_button("Download comparison CSV", table.to_csv(index=False).encode("utf-8"),
                                    file_name=f"cms_compare_{left}_{right}.csv", mime="text/csv", key="compare_download_v12")
                 st.caption("RVU and conversion-factor columns are displayed as published. No payment amounts are calculated.")
+                st.markdown("#### Why are these codes different?")
+                # The explanation is derived from the complete comparison table,
+                # not the differences-only display setting.
+                full_comparison = compare_codes(df, left, right, modifier)
+                for explanation in summarize_differences(full_comparison, left, right):
+                    st.markdown("- " + explanation)
+                with st.expander("Find supporting CMS E/M policy passages"):
+                    st.caption("Optional policy retrieval. A similar passage is not proof that a particular CPT code is appropriate.")
+                    if st.button("Retrieve official guidance", key="compare_policy_v13"):
+                        try:
+                            with st.spinner("Searching public CMS E/M guidance…"):
+                                terms = f"office outpatient E/M visits medical decision making time {left} {right}"
+                                passages = policy_engine("v13-cms-policy").search(terms, k=4)
+                            if not passages:
+                                st.info("No relevant passages found in the current guide.")
+                            for number, passage in enumerate(passages, 1):
+                                st.markdown(f"**Evidence {number} · PDF page {passage.get('page', 'unknown')}**")
+                                st.write(passage["text"][:750])
+                                st.markdown(f"[Open CMS source]({passage['source']})")
+                        except Exception as exc:
+                            st.warning(f"CMS policy retrieval unavailable: {exc}")
+                    st.caption("Policy coverage is limited to the currently configured CMS E/M PDF, which may not address every code pair.")
             except ValueError as exc:
                 st.warning(str(exc))
     st.markdown(f"[CMS source data]({CMS_CSV_URL})")
@@ -272,4 +295,4 @@ with tab_info:
     st.markdown(f"**Data source:** [CMS PFS indicators]({CMS_CSV_URL})")
     st.write("Autocomplete uses the actual public CMS descriptions and simple search aliases. 'Ask CMS' uses LangGraph routing and optional PDF chunk retrieval. The AI explanation is optional and needs an API key.")
     st.warning("Educational prototype: not medical advice, coding guidance, or a reimbursement determination. Verify current CMS rules and code effective dates.")
-st.caption("CMS Intelligence · V12 · Compare CMS codes")
+st.caption("CMS Intelligence · V13 · Evidence-backed comparison")
