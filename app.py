@@ -43,12 +43,13 @@ if mode == "HCPCS code lookup":
         st.caption("RVUs, indicator values, and conversion factors are not a final payable amount.")
 else:
     question = st.text_input("Ask about services", value="Which procedures relate to office visits?")
+    use_llm = st.checkbox("Generate an LLM explanation with cited evidence (requires OPENAI_API_KEY)")
     if st.button("Ask the retrieval agent", type="primary") and question.strip():
         try:
             search = get_search_engine()
             result = build_agent(search).invoke({"question": question})
             st.markdown(result["answer"])
-            if st.checkbox("Generate an LLM explanation with cited evidence (requires OPENAI_API_KEY)"):
+            if use_llm:
                 try:
                     st.markdown(answer_with_llm(question, result["results"]))
                 except Exception as llm_exc:
