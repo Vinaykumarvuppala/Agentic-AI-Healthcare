@@ -11,8 +11,8 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install test dependencies
-        run: pip install pandas numpy requests pytest langgraph
+        run: pip install pandas numpy requests pytest langgraph pypdf
       - name: Run unit tests
         run: pytest -q
       - name: Check syntax
-        run: python -m compileall -q app.py cms_agent.py llm_rag.py
+        run: python -m compileall -q app.py cms_agent.py llm_rag.py policy_rag.py research_agent.py
