@@ -4,7 +4,7 @@ import re
 import pandas as pd
 
 COLS=("hcpcs_code","change_type","old_record","new_record","older_release","newer_release","effective_date","termination_date","date_source")
-def records(frame:pd.DataFrame)->list[dict]:
+def records(frame:pd.DataFrame, verified_dates=None)->list[dict]:
     result=[]
     for row in frame.to_dict("records"):
         def val(k):
@@ -14,18 +14,32 @@ def records(frame:pd.DataFrame)->list[dict]:
             old_record=val("old_record"),new_record=val("new_record"),
             older_release=val("older_release"),newer_release=val("newer_release"),
             effective_date=None,termination_date=None,date_source=None))
+    if verified_dates is not None and not verified_dates.empty:
+        dated = verified_dates.copy()
+        dated["code"] = dated["code"].astype(str).str.upper()
+        for item in result:
+            matches = dated.loc[dated["code"] == item["hcpcs_code"]]
+            if len(matches) != 1:
+                continue
+            row = matches.iloc[0]
+            for field in ("effective_date", "termination_date"):
+                value = row.get(field)
+                if pd.notna(value):
+                    item[field] = pd.Timestamp(value).strftime("%Y-%m-%d")
+            if item["effective_date"] or item["termination_date"]:
+                item["date_source"] = "Mapped dated source record; verify provenance"
     return result
 
-def jsonl(frame):
-    return "\n".join(json.dumps(row,ensure_ascii=False) for row in records(frame))+"\n"
+def jsonl(frame, verified_dates=None):
+    return "\n".join(json.dumps(row,ensure_ascii=False) for row in records(frame, verified_dates))+"\n"
 
-def json_array(frame):
-    return json.dumps(records(frame),indent=2,ensure_ascii=False)
+def json_array(frame, verified_dates=None):
+    return json.dumps(records(frame, verified_dates),indent=2,ensure_ascii=False)
 
 def sql_literal(value):
     return "NULL" if value is None else "N'"+str(value).replace("'","''")+"'"
 
-def sqlserver_script(frame):
+def sqlserver_script(frame, verified_dates=None):
     lines=["-- CMS snapshot comparison: effective/termination dates UNKNOWN, not inferred",
 """IF OBJECT_ID(N'dbo.cms_hcpcs_changes', N'U') IS NULL
 CREATE TABLE dbo.cms_hcpcs_changes (
@@ -35,7 +49,7 @@ CREATE TABLE dbo.cms_hcpcs_changes (
  effective_date DATE NULL, termination_date DATE NULL, date_source NVARCHAR(500) NULL,
  CONSTRAINT PK_cms_hcpcs_changes PRIMARY KEY (hcpcs_code,older_release,newer_release)
 );"""]
-    for r in records(frame):
+    for r in records(frame, verified_dates):
         vals=[sql_literal(r[c]) for c in COLS]
         values=", ".join(vals)
         lines.append("IF NOT EXISTS (SELECT 1 FROM dbo.cms_hcpcs_changes WHERE hcpcs_code = "+sql_literal(r["hcpcs_code"])+
@@ -43,7 +57,7 @@ CREATE TABLE dbo.cms_hcpcs_changes (
             ") INSERT INTO dbo.cms_hcpcs_changes ("+", ".join(COLS)+") VALUES ("+values+");")
     return "\n".join(lines)+"\n"
 
-def oracle_script(frame):
+def oracle_script(frame, verified_dates=None):
     lines=["-- Oracle SQL/PLSQL: dates are NULL because snapshot comparisons cannot establish lifecycle dates.",
 """CREATE TABLE cms_hcpcs_changes (
  hcpcs_code VARCHAR2(5) NOT NULL, change_type VARCHAR2(60) NOT NULL,
