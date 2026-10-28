@@ -51,6 +51,9 @@ with tab_search:
         st.session_state.pop("selected_code_v6", None)
         st.session_state["last_query_v7"] = q
         st.session_state.pop("semantic_request_v8", None)
+        st.session_state.pop("semantic_cache_query_v10", None)
+        st.session_state.pop("semantic_results_v10", None)
+        st.session_state["semantic_page_v10"] = 1
     if q.strip():
         # Single search input: direct results render immediately; users can
         # request a deeper vector search without learning a second interface.
@@ -58,24 +61,52 @@ with tab_search:
             st.session_state["semantic_request_v8"] = q
         if st.session_state.get("semantic_request_v8") == q:
             try:
-                with st.spinner("Searching CMS codes by meaning…"):
-                    results = build_agent(code_engine("hybrid-v8")).invoke({"question": q}).get("results", [])
-                st.markdown("**AI-powered related procedures**")
-                seen = set()
-                for idx, item in enumerate(results):
-                    code = item["hcpc"]
-                    if code in seen:
-                        continue
-                    seen.add(code)
-                    if st.button(f"{code}   ·   {item['description']}", key=f"semantic_{idx}_{code}", use_container_width=True):
-                        st.session_state["selected_code_v6"] = code
-                if not seen:
-                    st.caption("No related procedures found.")
-                st.caption("Semantic results are approximate. Confirm codes against CMS documentation.")
+                # Persist results per query: changing page must not re-embed/re-query.
+                if st.session_state.get("semantic_cache_query_v10") != q:
+                    with st.spinner("Searching CMS codes by meaning…"):
+                        if q.strip().isalnum() and any(ch.isdigit() for ch in q):
+                            # Partial HCPCS input: prefix matches are more useful than vectors.
+                            matches = suggest(df, q, limit=150)
+                            items = [{"hcpc": x["code"], "description": x["description"]} for x in matches]
+                        else:
+                            index = code_engine("hybrid-v10")
+                            items = index.search(q, k=60)
+                    unique = []
+                    seen = set()
+                    for item in items:
+                        if item["hcpc"] not in seen:
+                            seen.add(item["hcpc"])
+                            unique.append(item)
+                    st.session_state["semantic_results_v10"] = unique
+                    st.session_state["semantic_cache_query_v10"] = q
+                    st.session_state["semantic_page_v10"] = 1
+                found = st.session_state.get("semantic_results_v10", [])
+                st.markdown(f"**Related procedures ({len(found)} found)**")
+                if found:
+                    page_size = 6
+                    total_pages = (len(found) + page_size - 1) // page_size
+                    current_page = min(st.session_state.get("semantic_page_v10", 1), total_pages)
+                    st.caption(f"Showing {((current_page-1)*page_size)+1}–{min(current_page*page_size,len(found))} of {len(found)} · page {current_page}/{total_pages}")
+                    for i, item in enumerate(found[(current_page-1)*page_size:current_page*page_size]):
+                        code = item["hcpc"]
+                        if st.button(f"{code}   ·   {item['description']}", key=f"related_{current_page}_{i}_{code}", use_container_width=True):
+                            st.session_state["selected_code_v6"] = code
+                    prev_col, next_col = st.columns(2)
+                    with prev_col:
+                        if st.button("← Previous", disabled=current_page<=1, key="semantic_prev_v10", use_container_width=True):
+                            st.session_state["semantic_page_v10"] = current_page-1
+                            st.rerun()
+                    with next_col:
+                        if st.button("Next →", disabled=current_page>=total_pages, key="semantic_next_v10", use_container_width=True):
+                            st.session_state["semantic_page_v10"] = current_page+1
+                            st.rerun()
+                else:
+                    st.info("No related procedures found. Try a more specific phrase.")
+                st.caption("Results are approximate; verify CMS codes and effective dates.")
             except Exception as exc:
                 st.warning(f"Meaning-based search is unavailable: {exc}")
+        st.divider()
 
-            st.divider()
     if not q.strip():
         st.caption("Start typing to see matching procedures. Search descriptions, partial codes, or common terms.")
         st.markdown("**Popular searches**")
@@ -178,4 +209,4 @@ with tab_info:
     st.markdown(f"**Data source:** [CMS PFS indicators]({CMS_CSV_URL})")
     st.write("Autocomplete uses the actual public CMS descriptions and simple search aliases. 'Ask CMS' uses LangGraph routing and optional PDF chunk retrieval. The AI explanation is optional and needs an API key.")
     st.warning("Educational prototype: not medical advice, coding guidance, or a reimbursement determination. Verify current CMS rules and code effective dates.")
-st.caption("CMS Intelligence · V9 · Search without scrolling")
+st.caption("CMS Intelligence · V10 · Browse more relevant results")
