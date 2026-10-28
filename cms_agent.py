@@ -53,7 +53,12 @@ def build_documents(df: pd.DataFrame) -> list[dict]:
             "year": str(row.get("year", "")),
             "source": CMS_CSV_URL,
         })
-    return result
+    # CMS source may contain repeated rows; preserve distinct modifiers/statuses.
+    unique = {}
+    for item in result:
+        key = (item["hcpc"], item["modifier"], item["description"], item["procedure_status"])
+        unique.setdefault(key, item)
+    return list(unique.values())
 
 
 class VectorSearch:
@@ -80,8 +85,36 @@ class VectorSearch:
                 return [dict(d, score=1.0) for d in matches[:k]]
         q = self.model.encode([query], normalize_embeddings=True)[0]
         scores = np.asarray(self.vectors) @ np.asarray(q)
-        indices = np.argsort(-scores)[:k]
-        return [dict(self.documents[int(i)], score=float(scores[i])) for i in indices]
+        # Prefer common medical E/M codes for generic office/outpatient visit queries.
+        # Do not exclude dental or other categories for explicitly dental questions.
+        medical_office_query = (
+            any(word in query.lower() for word in ("office visit", "office visits", "outpatient evaluation"))
+            and not any(word in query.lower() for word in ("dental", "dentist", "dentistry"))
+        )
+        candidates = np.argsort(-scores)[:max(200, k * 30)]
+        ranked = []
+        for idx in candidates:
+            doc = self.documents[int(idx)]
+            score = float(scores[int(idx)])
+            code = doc["hcpc"]
+            if medical_office_query and (code.startswith("992") or code.startswith("993")):
+                score += 0.16
+            if medical_office_query and code.startswith("D"):
+                score -= 0.16
+            ranked.append((score, doc))
+        ranked.sort(key=lambda pair: pair[0], reverse=True)
+        chosen = []
+        seen = set()
+        for score, doc in ranked:
+            # Show each code once for general questions; an exact code lookup
+            # above still returns modifier-specific records.
+            if doc["hcpc"] in seen:
+                continue
+            seen.add(doc["hcpc"])
+            chosen.append(dict(doc, score=score))
+            if len(chosen) == k:
+                break
+        return chosen
 
 
 def extract_hcpcs(query: str) -> str | None:
